@@ -1,0 +1,8 @@
+:TER?
+:OPERegister:CONDition?
+:TIMebase:SCALe?
+:CHANnel1:SCALe?
+:TRIGger:EDGE:LEVel?
+:MEASure:VMAX? CHANnel1
+:MEASure:VMIN? CHANnel1
+#png rc330_v1

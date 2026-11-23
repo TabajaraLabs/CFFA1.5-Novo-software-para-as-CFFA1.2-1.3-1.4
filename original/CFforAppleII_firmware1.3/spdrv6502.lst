@@ -1,0 +1,2249 @@
+ca65 V2.6.9 - (C) Copyright 1998-2000 Ullrich von Bassewitz
+Main file   : spdrv6502.s
+Current file: spdrv6502.s
+
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; ProDOS/SmartPort driver for CompactFlash/IDE Interface for Apple II computers
+000000r 1               ; spdrv6502.s  Version 1.0 - 04/18/2004
+000000r 1               ;
+000000r 1               ; Firmware Contributors:        Email:
+000000r 1               ;  Chris Schumann                cschumann@twp-llc.com
+000000r 1               ;  Rich Dreher                   rich@dreher.net
+000000r 1               ;  Dave Lyons                    dlyons@lyons42.com
+000000r 1               ;
+000000r 1               ;
+000000r 1               ; This version only requires a 6502 or later equipped machine.
+000000r 1               ;
+000000r 1               ; Tools used to build this driver: CA65: 6502 Cross Assembler
+000000r 1               ; http://www.cc65.org/
+000000r 1               ;
+000000r 1               ; Here is the copyright from that tool using --version option
+000000r 1               ; ca65 V2.6.9 - (C) Copyright 1998-2000 Ullrich von Bassewitz
+000000r 1               ;
+000000r 1               ; Example build instructions on an MSDOS based machine:
+000000r 1               ;------------------------------------------------------
+000000r 1               ; Assumes you have installed the CC65 package and set your path, etc.
+000000r 1               ;
+000000r 1               ; 1) c:\firmware> ca65 -t apple2 --cpu 6502 -l spdrv6502.s
+000000r 1               ; 2) c:\firmware> ld65 -t apple2 spdrv6502.o -o spdrv6502.bin
+000000r 1               ; 3) Because the EPROM can hold up to 8 user selectable version of firmware
+000000r 1               ;    you must load spdrv6502.bin into your EPROM programmer with one of the
+000000r 1               ;    following offsets:
+000000r 1               ;    (Note: this offset has nothing to do with the card slot offsets)
+000000r 1               ;
+000000r 1               ;  for driver #0: use offset $0000.  Selected with: A14= IN, A13= IN, A12= IN
+000000r 1               ;  for driver #1: use offset $1000.  Selected with: A14= IN, A13= IN, A12=OUT
+000000r 1               ;  for driver #2: use offset $2000.  Selected with: A14= IN, A13=OUT, A12= IN
+000000r 1               ;  for driver #3: use offset $3000.  Selected with: A14= IN, A13=OUT, A12=OUT
+000000r 1               ;  for driver #4: use offset $4000.  Selected with: A14=OUT, A13= IN, A12= IN
+000000r 1               ;  for driver #5: use offset $5000.  Selected with: A14=OUT, A13= IN, A12=OUT
+000000r 1               ;  for driver #6: use offset $6000.  Selected with: A14=OUT, A13=OUT, A12= IN
+000000r 1               ;  for driver #7: use offset $7000.  Selected with: A14=OUT, A13=OUT, A12=OUT
+000000r 1               ;
+000000r 1               ;  where IN = jumper shorted, and OUT = jumper open
+000000r 1               ;  Driver #0 through #7 correspond to the user selectable
+000000r 1               ;  jumpers: J6 (A14,A13,A12) on the interface card.
+000000r 1               ;
+000000r 1               ; 4) Load as many firmware versions, up to 8, into the EPROM programmer as you
+000000r 1               ;    want. Remember that most programmers will, by default, clear all unused
+000000r 1               ;    memory to $FF when you load a binary file. You will need to disable that
+000000r 1               ;    feature after loading the first file.
+000000r 1               ;
+000000r 1               ; 5) Now you have an EPROM ready image to be programmed.
+000000r 1               ;    Using a standard 27C256 EPROM or similar, program your EPROM.
+000000r 1               ;
+000000r 1               ; Firmware Version History
+000000r 1               ;-------------------------
+000000r 1               ;
+000000r 1               ; Version 1.0:  (6502 version located at EPROM offset $4000, selection #4)
+000000r 1               ;   - Start of 6502 specific driver. Based on Version 1.2 spdrv.s driver
+000000r 1               ;   - Now works with 6502 CPU. Removed all 65C02 specific instruction from the ver 1.2 firmware
+000000r 1               ;   - NOTE: To work in 6502 based machine, logic CPLD version 1.3 or later is required.
+000000r 1               ;   - Changed error messages to upper case for Apple ]['s that don't support lower case.
+000000r 1               ;   - Setup slot specific behavior: Slot 5 has smartport enabled but will not autoboot.
+000000r 1               ;       All other slots have smartport disabled, but will autoboot in an Apple ][+ or ][e.
+000000r 1               ;   - Made 4th boot signature byte a parameter to boot code macro to ease slot specific setup.
+000000r 1               ;   - Changed GSOS_DRIVER signature to $10. This will prevent Dave Lyons' GS/OS driver from
+000000r 1               ;       loading should someone inadvertently using this firmware in a ][GS.
+000000r 1               ;   - Change offsets for code loading with addition of .RES command
+000000r 1               ;       bin files can now be loaded in EPROM at normal 4K offsets:$0, $1000, $2000, etc,
+000000r 1               ;       instead of offsets $100, $1100, $2100, etc.
+000000r 1               ;
+000000r 1               ; PLD Logic Firmware Information
+000000r 1               ;-------------------------------
+000000r 1               ; This version of firmware assumes you are using PLD logic of at
+000000r 1               ; least CPLD logic version 1.3.  The source files for U6, the Altera PLD are:
+000000r 1               ;       Appleideinterface.gdf
+000000r 1               ;       Appleidelogic.tdf
+000000r 1               ;
+000000r 1               ; The programmer ready output file for the PLD logic is:
+000000r 1               ;       Appleideinterface.pof
+000000r 1               ;
+000000r 1               ; These files are not included with this code.
+000000r 1               ;
+000000r 1               ; Acknowledgements
+000000r 1               ;-----------------
+000000r 1               ;Thanks to:
+000000r 1               ; Chris Schuman - for his extensive initial development work
+000000r 1               ; David Lyons   - for technical information, many improvement ideas and
+000000r 1               ;                 SmartPort code development
+000000r 1               ;
+000000r 1               
+000000r 1               .define         EQU             =
+000000r 1               .define         TRUE            1
+000000r 1               .define         FALSE           0
+000000r 1               
+000000r 1               
+000000r 1               ;
+000000r 1               ; Firmware Version Information
+000000r 1               ;
+000000r 1               FIRMWARE_VER    EQU $10        ;Version 1.0 (Version of this code)
+000000r 1               SPDRIVERVERSION EQU $1200      ;SmartPort version 1.2
+000000r 1               GSOS_DRIVER     EQU $10        ;GS/OS driver will check this byte to see if it
+000000r 1                                               ;is still compatible with this firmware.
+000000r 1                                               ;Increment by one, when something changes that
+000000r 1                                               ;would require a change in the GS/OS driver.
+000000r 1                                               ;Otherwise only change the FIRMWARE_VER for all
+000000r 1                                               ;other changes.
+000000r 1                                               ;01 = ProDOS Driver supporting 2 drives.
+000000r 1                                               ;02 = SmartPort Driver supporting 4 drives
+000000r 1                                               ;03 = SmartPort Driver supporting 8 drives.NOTE: GS/OS driver won't load
+000000r 1                                               ;10 - 6502 version: ProDOS Driver supporting 2 drives. NOTE: GS/OS driver won't load
+000000r 1               ;
+000000r 1               ; Firmware Configuration Settings:
+000000r 1               ;
+000000r 1               SMARTPORT_SIG   EQU FALSE      ;Set to FALSE for booting on ][, ][+ machines who's ROM checks 4 bytes of boot sig.
+000000r 1                                              ;    to TRUE for booting on IIe and later machines, that only check 3 bytes of boot sig.
+000000r 1               
+000000r 1               BLOCKOFFSET     EQU 0          ;0..255: LBA of first block of first partition
+000000r 1               PARTITIONS32MB  EQU 4          ;Number of 32MB Partitions supported
+000000r 1                                              ;Remember, ProDOS only supports 13 total
+000000r 1                                              ;volumes for all devices, floppies, SCSI drives,
+000000r 1                                              ;RAM drives, etc.
+000000r 1               DEBUG  = FALSE
+000000r 1               ;DEBUG  = TRUE
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; To enable debug output, set DEBUG = TRUE, only if you have a Apple Super
+000000r 1               ; Serial card in slot 2. This will output one line of text for each request
+000000r 1               ; made to the firmware, which can be seen on a computer or terminal attached to
+000000r 1               ; the SSC.
+000000r 1               ;
+000000r 1               ; NOTE: If you use DEBUG=TRUE and you don't have an Apple Super Serial card in
+000000r 1               ; slot 2, your computer might hang in the routine DSChar, waiting for
+000000r 1               ; the SSC status bit to say it is okay to write to the 6551 UART.
+000000r 1               ;
+000000r 1               ; Set your terminal (software) at the remote end as follows:
+000000r 1               ; BaudRate:      19200
+000000r 1               ; Data Bits:     8
+000000r 1               ; Parity:        None
+000000r 1               ; Stop Bits:     1
+000000r 1               ;
+000000r 1               ; Example debug output at terminal from CAT command in ProDOS 8. Card is in
+000000r 1               ; slot 6. ProDOS makes a ProDOS 8 call to the firmware to read block 2 from
+000000r 1               ; unit: 60 into buffer memory at $DC00.
+000000r 1               ;
+000000r 1               ; P8: Rd B:0002 U:60 A$DC00 Chk$6711
+000000r 1               ;
+000000r 1               ; Rd = ProDOS Read ($01). Also could be Wr = write ($02), St = Status ($00)
+000000r 1               ; U:60 = ProDOS 8 unit number $60  Slot 6, drive 1
+000000r 1               ; A$DC00 = ProDOS buffer address
+000000r 1               ; Chk$6711 = Simple block checksum used to visually check data integrity
+000000r 1               ;
+000000r 1               ; NOTE: When DEBUG is true, some zero-page locations are used. The data at
+000000r 1               ; these locations are saved and restored and should not impact other programs.
+000000r 1               
+000000r 1               
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; Driver constant definitions
+000000r 1               ;
+000000r 1               INITDONESIG     EQU $A5           ;Device init is done signature value
+000000r 1               CR              EQU $0D
+000000r 1               BELL            EQU $07
+000000r 1               
+000000r 1               ; ProDOS request Constants
+000000r 1               PRODOS_STATUS   EQU $00
+000000r 1               PRODOS_READ     EQU $01
+000000r 1               PRODOS_WRITE    EQU $02
+000000r 1               PRODOS_FORMAT   EQU $03
+000000r 1               
+000000r 1               ;ProDOS Return Codes
+000000r 1               PRODOS_NO_ERROR      EQU $00    ;No error
+000000r 1               PRODOS_BADCMD        EQU $01    ;Bad Command (not implemented)
+000000r 1               PRODOS_IO_ERROR      EQU $27    ;I/O error
+000000r 1               PRODOS_NO_DEVICE     EQU $28    ;No Device Connected
+000000r 1               PRODOS_WRITE_PROTECT EQU $2B    ;Write Protected
+000000r 1               PRODOS_BADBLOCK      EQU $2D    ;Invalid block number requested
+000000r 1               PRODOS_OFFLINE       EQU $2F    ;Device off-line
+000000r 1               
+000000r 1               ;SmartPort return codes
+000000r 1               BAD_UNIT_NUMBER EQU $11
+000000r 1               
+000000r 1               ; ATA Commands Codes
+000000r 1               ATACRead        EQU $20
+000000r 1               ATACWrite       EQU $30
+000000r 1               ATAIdentify     EQU $EC
+000000r 1               
+000000r 1               ;Constants for Wait
+000000r 1               ; Constant = (Delay[in uS]/2.5 + 2.09)^.5 - 2.7
+000000r 1               
+000000r 1               WAIT_100ms      EQU 197
+000000r 1               WAIT_40ms       EQU 124
+000000r 1               WAIT_100us      EQU 4
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; Slot I/O definitions
+000000r 1               ;
+000000r 1               mslot           = $7F8          ;Apple defined location for the last active slot
+000000r 1               
+000000r 1               IOBase          = $C080
+000000r 1               ATADataHigh     = IOBase+0
+000000r 1               SetCSMask       = IOBase+1      ;Two special strobe locations to set and clear
+000000r 1                                               ; MASK bit that is used to disable CS0 line to
+000000r 1                                               ; the CompactFlash during the CPU read cycles
+000000r 1               ClearCSMask     = IOBase+2      ; that occur before every CPU write cycle.
+000000r 1                                               ; The normally innocuous read cycles were
+000000r 1                                               ; causing the SanDisk CF to double increment
+000000r 1                                               ; during sector writes commands.
+000000r 1               
+000000r 1               ATADevCtrl      = IOBase+6      ;when writing
+000000r 1               ATAAltStatus    = IOBase+6      ;when reading
+000000r 1               ATADataLow      = IOBase+8
+000000r 1               ATAError        = IOBase+9
+000000r 1               ATASectorCnt    = IOBase+10
+000000r 1               ATASector       = IOBase+11
+000000r 1               ATACylinder     = IOBase+12
+000000r 1               ATACylinderH    = IOBase+13
+000000r 1               ATAHead         = IOBase+14
+000000r 1               ATACommand      = IOBase+15     ; when writing
+000000r 1               ATAStatus       = IOBase+15     ; when reading
+000000r 1               
+000000r 1               ; Scratchpad RAM base addresses. Access using the Y register containg the slot #
+000000r 1               ;
+000000r 1               DriveResetDone  = $478          ;remember the device has been software reset
+000000r 1               DriveNumber     = $4f8          ;normally 0 to 3 for four 32MB partitions
+000000r 1               SerialInitDone  = $578          ;For debug: if $A5 then serial init is complete
+000000r 1               DrvBlkCount0    = $5f8          ;low byte of usable block count
+000000r 1                                               ; (excluding first BLOCKOFFSET blocks)
+000000r 1               DrvBlkCount1    = $678          ;bits 8..15 of usable block count
+000000r 1               DrvBlkCount2    = $6f8          ;bits 16..23 of usable block count
+000000r 1               DrvMiscFlags    = $778          ;bit 7 = raw LBA block access
+000000r 1               Available2      = $7f8          ;not currently used
+000000r 1               
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; Zero-page RAM memory usage
+000000r 1               
+000000r 1               .IF DEBUG                       ;data at these locations saved and restored
+000000r 1               MsgPointerLow   = $EB
+000000r 1               MsgPointerHi    = $EC
+000000r 1               CheckSumLow     = $ED
+000000r 1               CheckSumHigh    = $EE
+000000r 1               .ENDIF
+000000r 1               
+000000r 1               zpt1            = $EF           ;data at this location is saved/restored
+000000r 1               
+000000r 1               StackBase       = $100
+000000r 1               
+000000r 1               ; ProDOS block interface locations
+000000r 1               pdCommandCode   = $42
+000000r 1               pdUnitNumber    = $43
+000000r 1               pdIOBuffer      = $44
+000000r 1               pdIOBufferH     = $45
+000000r 1               pdBlockNumber   = $46
+000000r 1               pdBlockNumberH  = $47
+000000r 1               
+000000r 1               ; Arbitrary locations for Smartport data,
+000000r 1               ;  these locations are saved/restored before exit.
+000000r 1               spCommandCode   = pdCommandCode
+000000r 1               
+000000r 1               spParamList     = $48           ;2 bytes
+000000r 1               spCmdList       = $4A           ;2 bytes
+000000r 1               spCSCode        = $4C
+000000r 1               spSlot          = $4D
+000000r 1               spSlotX16       = $4E
+000000r 1               spLastZP        = spSlotX16
+000000r 1               
+000000r 1               spZeroPgArea    = pdCommandCode ; $42
+000000r 1               spZeroPgSize    = spLastZP-spZeroPgArea+1
+000000r 1               
+000000r 1               
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; Apple II ROM entry points
+000000r 1               ;
+000000r 1               ; We can use these at boot time, but not while handling a call through
+000000r 1               ; our ProDOS or SmartPort entry points, as the ROM may not be available.
+000000r 1               ;
+000000r 1               SetVID          = $FE89
+000000r 1               SetKBD          = $FE93
+000000r 1               COUT            = $FDED
+000000r 1               INIT            = $FB2F
+000000r 1               HOME            = $FC58
+000000r 1               ROMWAIT         = $FCA8
+000000r 1               AppleSoft       = $E000
+000000r 1               
+000000r 1               ;------------------------------------------------------------------------------
+000000r 1               ; Start of Peripheral Card ROM Space $Cn00 to $CnFF
+000000r 1               ; A macro is used here so that this code can be easily duplicated for each slot
+000000r 1               ; instead of by hand using the EPROM programmer. This is done because
+000000r 1               ; the hardware does not overlay the C1xx address space at C2xx, C3xx, etc.
+000000r 1               ; automatically. Instead the base address for the EPROM is $C000 but is enabled
+000000r 1               ; only when a valid address in the range of $C100 to $CEFF is on the bus. This
+000000r 1               ; allows for the development of slot specific behaviors in firmware, if desired.
+000000r 1               ; Currently that is not being done, instead the same slot code is repeated for
+000000r 1               ; every slot ROM space. Addresses $C000 to $C0FF are not decoded by the
+000000r 1               ; hardware as it is Apple's internal I/O. Any access of $CF00 to $CFFF is
+000000r 1               ; decoded by the card to reset the Expansion ROM flip-flop, but remember to
+000000r 1               ; use always address $CFFF for that task.
+000000r 1               
+000000r 1               .macro  CnXX    SLOTADDR, SLOTx16, SLOT, SIGNATURE_BYTE_4
+000000r 1                  .local P8DriverEntry
+000000r 1                  .local P8Driver
+000000r 1                  .local SmartPortEntry
+000000r 1                  .local SPDriver
+000000r 1                  .local Boot
+000000r 1                  .local Error
+000000r 1                  .local NotScanning
+000000r 1                  .local wasteTime
+000000r 1                  .local ErrorMsgDisplay
+000000r 1                  .local msgLoop
+000000r 1                  .local msgDone
+000000r 1                  .local ErrorMessage
+000000r 1               
+000000r 1                  lda  #$20                    ;$20 is a signature for a drive to ProDOS
+000000r 1                  ldx  #$00                    ;$00 "
+000000r 1                  lda  #$03                    ;$03 "
+000000r 1               
+000000r 1               
+000000r 1               
+000000r 1                  .byte $A9
+000000r 1                  .byte SIGNATURE_BYTE_4       ;If this byte has b7 set, the next instruction should be a bmi
+000000r 1                  bpl  Boot                    ;NOTE: this must be a 2 byte instuction to keep the entry point offset correct
+000000r 1               
+000000r 1               ;------------------- Non-boot P8 driver entry point ---------------------
+000000r 1               ;  The EPROM holding this code is decoded and mapped into $C100 to $CEFF,
+000000r 1               ;  it is not nessecary to dynamically determine which slot we are in, as is
+000000r 1               ;  common in card firmware. This code is in a MACRO and is located absolutely
+000000r 1               ;  per slot. Any code in this MACRO that is not relocatable will have to be
+000000r 1               ;  based on the MACROs parameters SLOTADDR, SLOTx16, SLOT.
+000000r 1               
+000000r 1               P8DriverEntry:
+000000r 1                  jmp  P8Driver                ;located at $Cn0A for best compatibility
+000000r 1               SmartPortEntry:                 ;By definition, SmartPort entry is 3 bytes
+000000r 1                                               ; after ProDOS entry
+000000r 1                  jmp  SPDriver
+000000r 1               
+000000r 1               Boot:
+000000r 1                  ldy  #SLOT                   ;Y reg now has $0n for accessing scratchpad RAM
+000000r 1                  ldx  #SLOTx16                ;X reg now has $n0 for indexing I/O
+000000r 1                  lda  #>SLOTADDR              ;loads A with slot# we are in:$Cn
+000000r 1                  sta  mslot                   ;Apple defined location reserved for last slot
+000000r 1                                               ; active. MSLOT needs the form of $Cn
+000000r 1                  bit  $cfff                   ;turn off expansion ROMs
+000000r 1               
+000000r 1               ;
+000000r 1               ; Need to wait here (before CheckDevice) in case the CFFA RESET jumper
+000000r 1               ; is enabled, or a Delkin Devices CF card never becomes ready.
+000000r 1               ;
+000000r 1                  ldy  #5
+000000r 1               wasteTime:
+000000r 1                  lda  #WAIT_100ms
+000000r 1                  jsr  ROMWAIT
+000000r 1                  dey
+000000r 1                  bne  wasteTime
+000000r 1                  ldy  #SLOT
+000000r 1               
+000000r 1                  jsr  CheckDevice
+000000r 1                  bcs  Error
+000000r 1               
+000000r 1                  lda  #PRODOS_READ            ;Request: READ block
+000000r 1                  sta  pdCommandCode
+000000r 1                  lda  #0
+000000r 1                  sta  pdIOBuffer              ;Into Location $800
+000000r 1                  sta  pdBlockNumber           ;ProDOS block $0000 (the bootloader block)
+000000r 1                  sta  pdBlockNumberH
+000000r 1                  lda  #$08
+000000r 1                  sta  pdIOBufferH
+000000r 1                  stx  pdUnitNumber            ;From unit number: $n0 (where n=slot#),
+000000r 1                                               ; so drive bit is always 0
+000000r 1               
+000000r 1                  jsr  P8Driver                ;Read bootloader from device's block 0 into
+000000r 1                                               ; location $800
+000000r 1                  bcs  Error                   ;Check for error during bootblock read
+000000r 1               
+000000r 1                  lda  $800                    ;Check the first byte of boot loader code.
+000000r 1                  cmp  #$01                    ;If bootload code is there, this byte = $01
+000000r 1                  bne  Error
+000000r 1                  lda  $801                    ;If second byte is a 0, it's invalid
+000000r 1                                               ; (we'd JMP to a BRK)
+000000r 1                  beq  Error
+000000r 1               
+000000r 1                  ldx  pdUnitNumber            ;X should contain the unit number when jumping
+000000r 1                                               ; to the bootloader
+000000r 1                  jmp  $801                    ;No errors, jump to bootloader just read.
+000000r 1               
+000000r 1               
+000000r 1               ; If any error occured, like drive not present, check to see if we are in a
+000000r 1               ; boot scan, if so re-enter scan routine, else drop to Applesoft, aborting boot.
+000000r 1               Error:
+000000r 1                  lda  $00
+000000r 1                  bne  NotScanning
+000000r 1                  lda  $01
+000000r 1                  cmp  mslot
+000000r 1                  bne  NotScanning
+000000r 1                  jmp  $FABA                   ;Re-enter Monitor's Autoscan Routine
+000000r 1               
+000000r 1               ;The boot code must have been called manually because we are not in a slot scan.
+000000r 1               NotScanning:
+000000r 1                  jsr  SetVID
+000000r 1                  jsr  SetKBD
+000000r 1               ;
+000000r 1               ;Display error message
+000000r 1               ;
+000000r 1                  jsr  INIT             ;text mode, full screen, page 1
+000000r 1                  jsr  HOME
+000000r 1                  ldy  #0
+000000r 1               msgLoop:
+000000r 1                  lda  ErrorMessage,y
+000000r 1                  beq  msgDone
+000000r 1                  ora  #$80
+000000r 1                  jsr  COUT
+000000r 1                  iny
+000000r 1                  jmp  msgLoop
+000000r 1               msgDone:
+000000r 1                  jmp  AppleSoft
+000000r 1               
+000000r 1               ErrorMessage:
+000000r 1                  .byte CR,CR,CR,CR,CR
+000000r 1                  .byte "CFFA: DEVICE MISSING, NOT FORMATTED,",CR
+000000r 1                  .byte "OR INCOMPATIBLE.",CR
+000000r 1               ; "vX.Y" built automatically:
+000000r 1                  .byte "VER:",$30+(FIRMWARE_VER/16),".",$30+(FIRMWARE_VER & $F), " FOR 6502."
+000000r 1               ; Beep, then end-of-message:
+000000r 1                  .byte BELL,$00
+000000r 1               
+000000r 1               
+000000r 1               ;------------------- Non-boot entry point for driver code -----------------
+000000r 1               ;
+000000r 1               ; Handle a ProDOS call
+000000r 1               ;
+000000r 1               ; Setup MSLOT, X and Y registers.
+000000r 1               ; This must be done every time we enter this driver.
+000000r 1               ;
+000000r 1               P8Driver:
+000000r 1                  ldy  #SLOT                   ;Y reg now has $0n for accessing scratchpad RAM
+000000r 1                  ldx  #SLOTx16                ;X reg now has $n0 for indexing I/O
+000000r 1                  lda  #>SLOTADDR              ;loads A with slot# we are in:$Cn(where n=slot#)
+000000r 1                  sta  mslot                   ;Apple defined location reserved for last slot
+000000r 1                                               ; active. MSLOT needs the form of $Cn
+000000r 1                  bit  $cfff                   ;turn off other ROM that might be on
+000000r 1                  sta  ClearCSMask,x           ;reset MASK bit in PLD for normal CS0 signaling
+000000r 1                  jmp  P8AuxROM
+000000r 1               
+000000r 1               ;--------------------- SmartPort call handler code -----------------------
+000000r 1               ;
+000000r 1               ; Called from jmp at $Cn0D.
+000000r 1               ; 1) Push a block of zero-page locations onto the stack, creating a work space.
+000000r 1               ; 2) Get the request parameters that follow the call to this driver
+000000r 1               ; 3) Using request parameters as pointers get request specific information
+000000r 1               ;    and set up the P8 driver request registers $42-$47.
+000000r 1               ; 4) Call P8Driver code
+000000r 1               ; 5) On return from P8Driver code, restore zero page work space, and return to
+000000r 1               ;    caller.
+000000r 1               ;
+000000r 1               SPDriver:
+000000r 1                  lda  #>SLOTADDR
+000000r 1                  sta  mslot
+000000r 1                  bit  $cfff
+000000r 1               
+000000r 1                  ldx  #SLOTx16                ;X reg now has $n0 for indexing I/O
+000000r 1                  sta  ClearCSMask,x           ;reset MASK bit in PLD for normal CS0 signaling
+000000r 1                  jmp  SPAuxROM
+000000r 1               
+000000r 1               
+000000r 1                  .RES   SLOTADDR+$F5-*        ;skip to $CnF5, where n is the slot#
+000000r 1               
+000000r 1                  .byte  GSOS_DRIVER           ;GS/OS driver compatibility byte. GS/OS driver
+000000r 1                                               ; checks this byte to see if it is compatible
+000000r 1                                               ; with this version of firmware. This way,
+000000r 1                                               ; changes to firware versions, that do not
+000000r 1                                               ; affect the GS/OS driver will not prevent the
+000000r 1                                               ; GS/OS driver from loading and running. This
+000000r 1                                               ; byte should be incremented each time a change
+000000r 1                                               ; is made that would prevent the GS/OS driver
+000000r 1                                               ; from working correctly. I.e. Partition layout
+000000r 1                                               ; or something similar.
+000000r 1               
+000000r 1                  .byte "CFFA", FIRMWARE_VER   ;$CnF6..CnFA: Card Hardware ID,
+000000r 1                                               ; non-standard scheme
+000000r 1               
+000000r 1               ;$CnFB: SmartPort status byte
+000000r 1                  .byte $0                     ; Not Extended; not SCSI; not RAM card
+000000r 1                                               ; Even if not supporting SmartPort, we need a
+000000r 1                                               ; zero at $CnFB so Apple's RAMCard driver
+000000r 1                                               ; doesn't mistake us for a "Slinky" memory
+000000r 1                                               ; card.
+000000r 1               
+000000r 1               ; Data table for ProDOS drive scan
+000000r 1               ; $CnFC/FD = disk capacity, if zero use status command to determine
+000000r 1                  .word $0000                  ;$CnFC-D: A zero here will cause prodos to
+000000r 1                                               ; rely on the status command to determine volume size
+000000r 1               
+000000r 1               ; $CnFE = status bits (BAP p7-14)
+000000r 1               ;  7 = medium is removable
+000000r 1               ;  6 = device is interruptable
+000000r 1               ;  5-4 = number of volumes (0..3 means 1..4)
+000000r 1               ;  3 = device supports Format call
+000000r 1               ;  2 = device can be written to
+000000r 1               ;  1 = device can be read from (must be 1)
+000000r 1               ;  0 = device status can be read (must be 1)
+000000r 1                  .byte %00010111              ; $CnFE: support 2 ProDOS drives
+000000r 1               
+000000r 1               ; $CnFF = LSB of block driver
+000000r 1                  .byte <P8DriverEntry         ; $CnFF: low-order offset to ProDOS entry point
+000000r 1               
+000000r 1               .endmacro
+000000r 1               ;
+000000r 1               ; Because the base address for this eprom is $C000. NOTE: Although it does NOT
+000000r 1               ; get enable for addresses in the $C000 to C0FF range, we still need a 1 page
+000000r 1               ; offset to get the code at the correct location.
+000000r 1               ;
+000000r 1  FF FF FF FF  .RES $100, $FF
+000004r 1  FF FF FF FF  
+000008r 1  FF FF FF FF  
+000100r 1               
+000100r 1               ;
+000100r 1               ; Parameters for following macros:
+000100r 1               ; CnXX SLOTADDR, SLOTx16, SLOT, SIGNATURE_BYTE_4
+000100r 1               ; A signature byte of $3C is same as Disk ][, and turns smartport support off, and allows autoboot on ][+, ][e.
+000100r 1               ; A signature byte of $00 signals smartport support, allow 4 drives in slot 5, but disable autoboot on ][+, ][e.
+000100r 1               
+000100r 1               .ORG $C100
+00C100  1  A9 20 A2 00     CnXX $C100, $10, $01, $3C         ;Slot PROM code for slot 1. SmartPort disabled. Autoboot.
+00C104  1  A9 03 A9 3C  
+00C108  1  10 06 4C D0  
+00C200  1               
+00C200  1               .ORG $C200
+00C200  1  A9 20 A2 00     CnXX $C200, $20, $02, $3C         ;Slot PROM code for slot 2. SmartPort disabled. Autoboot.
+00C204  1  A9 03 A9 3C  
+00C208  1  10 06 4C D0  
+00C300  1               
+00C300  1               .ORG $C300
+00C300  1  A9 20 A2 00     CnXX $C300, $30, $03, $3C         ;Slot PROM code for slot 3. SmartPort disabled. Autoboot.
+00C304  1  A9 03 A9 3C  
+00C308  1  10 06 4C D0  
+00C400  1               
+00C400  1               .ORG $C400
+00C400  1  A9 20 A2 00     CnXX $C400, $40, $04, $3C         ;Slot PROM code for slot 4. SmartPort disabled. Autoboot.
+00C404  1  A9 03 A9 3C  
+00C408  1  10 06 4C D0  
+00C500  1               
+00C500  1               .ORG $C500
+00C500  1  A9 20 A2 00     CnXX $C500, $50, $05, $00         ;Slot PROM code for slot 5. SmartPort enabled. No Autoboot.
+00C504  1  A9 03 A9 00  
+00C508  1  10 06 4C D0  
+00C600  1               
+00C600  1               .ORG $C600
+00C600  1  A9 20 A2 00     CnXX $C600, $60, $06, $3C         ;Slot PROM code for slot 6. SmartPort disabled. Autoboot.
+00C604  1  A9 03 A9 3C  
+00C608  1  10 06 4C D0  
+00C700  1               
+00C700  1               .listbytes      unlimited            ;Show all of the code bytes for the 7th slot
+00C700  1               .ORG $C700
+00C700  1  A9 20 A2 00     CnXX $C700, $70, $07, $3C         ;Slot PROM code for slot 7. SmartPort disabled. Autoboot.
+00C704  1  A9 03 A9 3C  
+00C708  1  10 06 4C D0  
+00C70C  1  C7 4C E2 C7  
+00C710  1  A0 07 A2 70  
+00C714  1  A9 C7 8D F8  
+00C718  1  07 2C FF CF  
+00C71C  1  A0 05 A9 C5  
+00C720  1  20 A8 FC 88  
+00C724  1  D0 F8 A0 07  
+00C728  1  20 9F CC B0  
+00C72C  1  28 A9 01 85  
+00C730  1  42 A9 00 85  
+00C734  1  44 85 46 85  
+00C738  1  47 A9 08 85  
+00C73C  1  45 86 43 20  
+00C740  1  D0 C7 B0 11  
+00C744  1  AD 00 08 C9  
+00C748  1  01 D0 0A AD  
+00C74C  1  01 08 F0 05  
+00C750  1  A6 43 4C 01  
+00C754  1  08 A5 00 D0  
+00C758  1  0A A5 01 CD  
+00C75C  1  F8 07 D0 03  
+00C760  1  4C BA FA 20  
+00C764  1  89 FE 20 93  
+00C768  1  FE 20 2F FB  
+00C76C  1  20 58 FC A0  
+00C770  1  00 B9 82 C7  
+00C774  1  F0 09 09 80  
+00C778  1  20 ED FD C8  
+00C77C  1  4C 71 C7 4C  
+00C780  1  00 E0 0D 0D  
+00C784  1  0D 0D 0D 43  
+00C788  1  46 46 41 3A  
+00C78C  1  20 44 45 56  
+00C790  1  49 43 45 20  
+00C794  1  4D 49 53 53  
+00C798  1  49 4E 47 2C  
+00C79C  1  20 4E 4F 54  
+00C7A0  1  20 46 4F 52  
+00C7A4  1  4D 41 54 54  
+00C7A8  1  45 44 2C 0D  
+00C7AC  1  4F 52 20 49  
+00C7B0  1  4E 43 4F 4D  
+00C7B4  1  50 41 54 49  
+00C7B8  1  42 4C 45 2E  
+00C7BC  1  0D 56 45 52  
+00C7C0  1  3A 31 2E 30  
+00C7C4  1  20 46 4F 52  
+00C7C8  1  20 36 35 30  
+00C7CC  1  32 2E 07 00  
+00C7D0  1  A0 07 A2 70  
+00C7D4  1  A9 C7 8D F8  
+00C7D8  1  07 2C FF CF  
+00C7DC  1  9D 82 C0 4C  
+00C7E0  1  8E CA A9 C7  
+00C7E4  1  8D F8 07 2C  
+00C7E8  1  FF CF A2 70  
+00C7EC  1  9D 82 C0 4C  
+00C7F0  1  00 C8 xx xx  
+00C7F4  1  xx 10 43 46  
+00C7F8  1  46 41 10 00  
+00C7FC  1  00 00 17 0A  
+00C800  1               
+00C800  1               .listbytes      12              ;revert back to normal listing mode for the rest
+00C800  1               
+00C800  1               ;-------------------- End of Peripheral Card ROM Space ----------------------
+00C800  1               
+00C800  1               
+00C800  1               ;--------------------- Start of I/O expansion ROM Space --------------------
+00C800  1               ; Code here starts at $c800
+00C800  1               ; This code area is absolute and can use absolute addressing
+00C800  1               .ORG   $C800                    ;note: .ORG does not cause this code to be
+00C800  1                                               ; placed at C800. The ".RES" statement above
+00C800  1                                               ; offsets this code
+00C800  1               
+00C800  1               
+00C800  1               ;------------------------------------------------------------------------------
+00C800  1               ; SmartPort
+00C800  1               ;
+00C800  1               ;------------------------------------------------------------------------------
+00C800  1               MagicRawBlocksUnit EQU 127      ;use unit 127 in ReadBlock/WriteBlock calls for
+00C800  1                                               ; raw LBA blocks.
+00C800  1               
+00C800  1               SPAuxROM:
+00C800  1               ; save  ZP, fetch cmd + pointer from (PC)
+00C800  1  A0 0C           ldy  #spZeroPgSize-1
+00C802  1               save:
+00C802  1  B9 42 00        lda  spZeroPgArea,y
+00C805  1  48              pha
+00C806  1  88              dey
+00C807  1  10 F9           bpl  save
+00C809  1  BA              tsx
+00C80A  1  BD 0E 01        lda  $101+spZeroPgSize,x
+00C80D  1  85 48           sta  spParamList
+00C80F  1  18              clc
+00C810  1  69 03           adc  #3
+00C812  1  9D 0E 01        sta  $101+spZeroPgSize,x
+00C815  1  BD 0F 01        lda  $102+spZeroPgSize,x
+00C818  1  85 49           sta  spParamList+1
+00C81A  1  69 00           adc  #0
+00C81C  1  9D 0F 01        sta  $102+spZeroPgSize,x
+00C81F  1               
+00C81F  1               ; set up spSlot and spSlotX16
+00C81F  1  AD F8 07        lda  mslot
+00C822  1  29 0F           and  #$0f
+00C824  1  A8              tay
+00C825  1  0A              asl  a
+00C826  1  0A              asl  a
+00C827  1  0A              asl  a
+00C828  1  0A              asl  a
+00C829  1  AA              tax
+00C82A  1  84 4D           sty  spSlot
+00C82C  1  86 4E           stx  spSlotX16
+00C82E  1               
+00C82E  1               ; clear DrvMiscFlags
+00C82E  1  A9 00           lda  #0
+00C830  1  99 78 07        sta  DrvMiscFlags,y          ;no special flags (such as raw block access)
+00C833  1               
+00C833  1               ; reset the device if this is our first call
+00C833  1  20 C4 CA        jsr  ResetDriveIfFirstTime   ;needs Y
+00C836  1               
+00C836  1               .IF DEBUG
+00C836  1               ;warning this debug code trashes the Acc register
+00C836  1                  jsr  DSString
+00C836  1                  .byte "SP:",0
+00C836  1               .ENDIF
+00C836  1               
+00C836  1               ; get command code from parameter list
+00C836  1  A0 01           ldy  #1
+00C838  1  B1 48           lda  (spParamList),y
+00C83A  1  85 42           sta  spCommandCode
+00C83C  1  C8              iny
+00C83D  1  B1 48           lda  (spParamList),y
+00C83F  1  AA              tax
+00C840  1  C8              iny
+00C841  1  B1 48           lda  (spParamList),y
+00C843  1  85 49           sta  spParamList+1
+00C845  1  86 48           stx  spParamList
+00C847  1               
+00C847  1  A9 01           lda  #PRODOS_BADCMD          ;anticipate bad command error
+00C849  1  A6 42           ldx  spCommandCode
+00C84B  1  E0 0A           cpx  #$09+1                  ;command too large
+00C84D  1  B0 21           bcs  out
+00C84F  1               
+00C84F  1  A0 00           ldy  #0
+00C851  1  B1 48           lda  (spParamList),y         ;parameter count
+00C853  1  DD 8D C8        cmp  RequiredParamCounts,x   ;command number still in X
+00C856  1  F0 05           beq  pCountOK
+00C858  1               
+00C858  1  A9 04           lda  #$04                    ;bad parameter count error
+00C85A  1  4C 70 C8        jmp  out
+00C85D  1               
+00C85D  1               pCountOK:
+00C85D  1  A0 01           ldy  #1
+00C85F  1  B1 48           lda  (spParamList),y
+00C861  1  A4 4D           ldy  spSlot
+00C863  1  99 F8 04        sta  DriveNumber,y
+00C866  1               
+00C866  1  8A              txa                            ;X is still the command code
+00C867  1  0A              asl  a
+00C868  1  AA              tax
+00C869  1  20 84 C8        jsr  JumpToSPCommand           ;Y is still spSlot
+00C86C  1               
+00C86C  1  B0 02           bcs  out
+00C86E  1  A9 00           lda  #0
+00C870  1               
+00C870  1               out:
+00C870  1  AA              tax                           ;error code in X
+00C871  1               
+00C871  1               ; Restore zero page
+00C871  1  A0 00           ldy  #0
+00C873  1               restore:
+00C873  1  68              pla
+00C874  1  99 42 00        sta  spZeroPgArea,y
+00C877  1  C8              iny
+00C878  1  C0 0D           cpy  #spZeroPgSize
+00C87A  1  90 F7           bcc  restore
+00C87C  1               
+00C87C  1  8A              txa
+00C87D  1  A0 02           ldy  #2                      ;high byte of # bytes transferred
+00C87F  1                                               ; (always (1) undefined, or
+00C87F  1                                               ; (2) #bytes transferred to host)
+00C87F  1  A2 00           ldx  #0                      ;low byte of # bytes transferred
+00C881  1  C9 01           cmp  #1                      ;C=1 if error code nonzero
+00C883  1  60              rts
+00C884  1               
+00C884  1               JumpToSPCommand:
+00C884  1  BD 98 C8        lda  spDispatch+1,x
+00C887  1  48              pha
+00C888  1  BD 97 C8        lda  spDispatch,x
+00C88B  1  48              pha
+00C88C  1  60              rts
+00C88D  1               
+00C88D  1               RequiredParamCounts:
+00C88D  1  03              .byte 3   ;0 = status
+00C88E  1  03              .byte 3   ;1 = read
+00C88F  1  03              .byte 3   ;2 = write
+00C890  1  01              .byte 1   ;3 = format
+00C891  1  03              .byte 3   ;4 = control
+00C892  1  01              .byte 1   ;5 = init
+00C893  1  01              .byte 1   ;6 = open
+00C894  1  01              .byte 1   ;7 = close
+00C895  1  04              .byte 4   ;8 = read
+00C896  1  04              .byte 4   ;9 = write
+00C897  1               
+00C897  1               spDispatch:
+00C897  1  AA C8           .word spStatus-1
+00C899  1  C3 C9           .word spReadBlock-1
+00C89B  1  D0 C9           .word spWriteBlock-1
+00C89D  1  DC C9           .word spFormat-1
+00C89F  1  DF C9           .word spControl-1
+00C8A1  1  03 CA           .word spInit-1
+00C8A3  1  0E CA           .word spOpen-1
+00C8A5  1  0E CA           .word spClose-1
+00C8A7  1  12 CA           .word spReadChars-1
+00C8A9  1  12 CA           .word spWriteChars-1
+00C8AB  1               
+00C8AB  1               ;------------------------------------------------------------------------------
+00C8AB  1               ; SmartPort STATUS call
+00C8AB  1               ;
+00C8AB  1               ; We support the standard calls, plus an "Identify" command
+00C8AB  1               ; for unit 0, which fills a buffer with the card's Identify
+00C8AB  1               ; data.
+00C8AB  1               ;
+00C8AB  1               spStatus:
+00C8AB  1  20 17 CA        jsr  SPSetupControlOrStatus
+00C8AE  1  B0 36           bcs  statOut
+00C8B0  1               
+00C8B0  1  A4 4D           ldy  spSlot
+00C8B2  1  B9 F8 04        lda  DriveNumber,y
+00C8B5  1  D0 37           bne  StatusForOneUnit
+00C8B7  1               
+00C8B7  1               ; StatusCode = 0 && unit == 0: status for this entire SmartPort interface
+00C8B7  1  A5 4C           lda  spCSCode
+00C8B9  1  F0 0B           beq  Status00
+00C8BB  1               
+00C8BB  1               ; Status for unit 0, subcode $49 = Identify (device-specific subcode)
+00C8BB  1  C9 49           cmp  #$49
+00C8BD  1  D0 03           bne  BadStatusCode
+00C8BF  1  4C 55 C9        jmp  spStatusIdentify
+00C8C2  1               
+00C8C2  1               ; Any other status code for unit 0 is an error.
+00C8C2  1               BadStatusCode:
+00C8C2  1  A9 21           lda  #$21
+00C8C4  1  38              sec
+00C8C5  1  60              rts
+00C8C6  1               
+00C8C6  1               Status00:
+00C8C6  1  A6 4E           ldx  spSlotX16
+00C8C8  1  A4 4D           ldy  spSlot
+00C8CA  1  20 ED CA        jsr  GetStatus
+00C8CD  1  B0 17           bcs  statOut
+00C8CF  1               
+00C8CF  1  A4 4D           ldy  spSlot
+00C8D1  1  B9 F8 06        lda  DrvBlkCount2,y
+00C8D4  1  18              clc
+00C8D5  1  69 01           adc  #1
+00C8D7  1  A0 00           ldy  #0
+00C8D9  1  91 4A           sta  (spCmdList),y           ;byte +0 = number of drives
+00C8DB  1               
+00C8DB  1  A0 07           ldy  #7
+00C8DD  1               Stat00Loop:
+00C8DD  1  B9 E6 C8        lda  Stat00Data-1,y
+00C8E0  1  91 4A           sta  (spCmdList),y
+00C8E2  1  88              dey
+00C8E3  1  D0 F8           bne  Stat00Loop
+00C8E5  1  18              clc
+00C8E6  1               statOut:
+00C8E6  1  60              rts
+00C8E7  1               
+00C8E7  1               Stat00Data:
+00C8E7  1  40              .byte $40                    ;Interrupt flag = no interrupts caused by this
+00C8E8  1                                               ; interface
+00C8E8  1               
+00C8E8  1  00 CC           .word $CC00                  ;Vendor ID assigned to Rich Dreher by
+00C8EA  1                                               ; www.syndicomm.com 3/16/2002
+00C8EA  1               
+00C8EA  1  00 12           .word SPDRIVERVERSION        ;Our version number
+00C8EC  1  00              .byte $00                    ;Reserved byte
+00C8ED  1  00              .byte $00                    ;Reserved byte
+00C8EE  1               
+00C8EE  1               StatusForOneUnit:
+00C8EE  1  18              clc
+00C8EF  1  E9 01           sbc  #1
+00C8F1  1  99 F8 04        sta  DriveNumber,y
+00C8F4  1               
+00C8F4  1  A6 4C           ldx  spCSCode
+00C8F6  1  F0 18           beq  Status0or3
+00C8F8  1  CA              dex
+00C8F9  1  F0 08           beq  StatusGetDCB
+00C8FB  1  CA              dex
+00C8FC  1  CA              dex
+00C8FD  1  F0 11           beq  Status0or3
+00C8FF  1  A9 21           lda  #$21                    ;Bad status code
+00C901  1  38              sec
+00C902  1  60              rts
+00C903  1               ;
+00C903  1               ; We have no interesting data to return for the device control
+00C903  1               ; block, so return the shortest one allowed: a length byte of
+00C903  1               ; 1 followed by a data byte of 0.
+00C903  1               ;
+00C903  1               StatusGetDCB:
+00C903  1  A9 01           lda  #1
+00C905  1  A0 00           ldy  #0
+00C907  1  91 4A           sta  (spCmdList),y           ;Returned length = 1
+00C909  1  A8              tay
+00C90A  1  A9 00           lda  #0
+00C90C  1  91 4A           sta  (spCmdList),y           ;Returned data = $00
+00C90E  1  18              clc
+00C90F  1  60              rts
+00C910  1               
+00C910  1               ;
+00C910  1               ; Status code 0 and 3 start off the same; 3 returns extra data.
+00C910  1               ;
+00C910  1               ; 0: return device status (1 byte device status + 3-byte block count)
+00C910  1               ; 3: return Device Information Block
+00C910  1               ;
+00C910  1               Status0or3:
+00C910  1  A9 F8           lda  #$F8                    ;Block device, write, read, format, online,
+00C912  1                                               ; not write-prot
+00C912  1  A0 00           ldy  #0
+00C914  1  91 4A           sta  (spCmdList),y
+00C916  1  A6 4E           ldx  spSlotX16
+00C918  1  A4 4D           ldy  spSlot
+00C91A  1  20 ED CA        jsr  GetStatus               ;Returns block count in YX
+00C91D  1  B0 C7           bcs  statOut
+00C91F  1               
+00C91F  1  98              tya
+00C920  1  A0 02           ldy  #2
+00C922  1  91 4A           sta  (spCmdList),y           ;CmdList +2 = bits 8..15 of block count
+00C924  1  88              dey
+00C925  1  8A              txa                          ;CmdList +1 = bits 0..7 of block count
+00C926  1  91 4A           sta  (spCmdList),y
+00C928  1  A0 03           ldy  #3
+00C92A  1  A9 00           lda  #0
+00C92C  1  91 4A           sta  (spCmdList),y           ;CmdList +3 = bits 16..23 of block count
+00C92E  1               
+00C92E  1  A5 4C           lda  spCSCode
+00C930  1  F0 0C           beq  statDone
+00C932  1               
+00C932  1               ; status code 3: return 21 more bytes of data
+00C932  1  A0 04           ldy #4
+00C934  1               stat3Loop:
+00C934  1  B9 3C C9        lda  stat3Data-4,y
+00C937  1  91 4A           sta  (spCmdList),y
+00C939  1  C8              iny
+00C93A  1  C0 19           cpy  #21+4
+00C93C  1  90 F6           bcc  stat3Loop
+00C93E  1               
+00C93E  1               statDone:
+00C93E  1  18              clc
+00C93F  1  60              rts
+00C940  1               
+00C940  1               stat3Data:
+00C940  1  0D 43 4F 4D     .byte 13,"COMPACT FLASH   "  ;length byte + 16-byte ASCII, padded
+00C944  1  50 41 43 54  
+00C948  1  20 46 4C 41  
+00C951  1  02              .byte $02                    ;device type = hard disk
+00C952  1  20              .byte $20                    ;subtype (no removable media, no extended,
+00C953  1                                               ; no disk switched)
+00C953  1  00 12           .word SPDRIVERVERSION
+00C955  1               
+00C955  1               ;------------------------------------------------------------------------------
+00C955  1               ; Identify (Status subcode)
+00C955  1               ;
+00C955  1               ; The status list is a 512-byte buffer that we will fill with
+00C955  1               ; the drive's IDE "Identify" data.  We post-process the data
+00C955  1               ; by byte-swapping the model name and serial number strings
+00C955  1               ; so they make sense.
+00C955  1               ;
+00C955  1               spStatusIdentify:
+00C955  1  A4 4D           ldy  spSlot
+00C957  1  A6 4E           ldx  spSlotX16
+00C959  1  20 9F CC        jsr  CheckDevice
+00C95C  1  90 03           bcc  ident1
+00C95E  1  A9 28           lda  #PRODOS_NO_DEVICE
+00C960  1  60              rts                          ;return error code in Acc with Carry set
+00C961  1               
+00C961  1               ident1:
+00C961  1  A9 00           lda  #0
+00C963  1  9D 80 C0        sta  ATADataHigh,x
+00C966  1               
+00C966  1  A9 EC           lda  #ATAIdentify
+00C968  1  9D 8F C0        sta  ATACommand,x            ;Issue the read command to the drive
+00C96B  1  20 95 CC        jsr  IDEWaitReady            ;Wait for BUSY flag to go away
+00C96E  1               
+00C96E  1  BD 8F C0        lda  ATAStatus,x             ;Check for error response
+00C971  1  29 09           and  #$09
+00C973  1  C9 01           cmp  #$01                    ;if DRQ=0 and ERR=1 an error occured
+00C975  1  D0 04           bne  iCommandOK
+00C977  1               
+00C977  1               iError:
+00C977  1               .IF DEBUG
+00C977  1               ;warning this debug code trashes the Acc register
+00C977  1                  jsr DSString
+00C977  1                  .byte "spIdfy Err:",0
+00C977  1                  lda  ATAError,x
+00C977  1                  jsr  DSByteCRLF
+00C977  1               .ENDIF
+00C977  1               
+00C977  1  A9 27           lda  #PRODOS_IO_ERROR
+00C979  1  38              sec
+00C97A  1  60              rts                          ;return error code in Acc with Carry set
+00C97B  1               ;
+00C97B  1               ; The "Identify" data is ready to read
+00C97B  1               ;
+00C97B  1               pageCount = spCommandCode       ;re-use a zero-page location
+00C97B  1               
+00C97B  1               iCommandOK:
+00C97B  1  A0 02           ldy  #2
+00C97D  1  84 42           sty  pageCount
+00C97F  1  A0 00           ldy  #0
+00C981  1               iLoop:
+00C981  1  BD 8F C0        lda  ATAStatus,x             ;Note: not using IDEWaitReady, inline code
+00C984  1                                               ; instead
+00C984  1  30 FB           bmi  iLoop                   ;Wait for BUSY (bit 7) to be zero
+00C986  1  29 08           and  #$08                    ;get DRQ status bit
+00C988  1  F0 ED           beq  iError                  ;if off, didn't get enough data
+00C98A  1               
+00C98A  1  BD 88 C0        lda  ATADataLow,x
+00C98D  1  91 4A           sta  (spCmdList),y
+00C98F  1  C8              iny
+00C990  1  BD 80 C0        lda  ATADataHigh,x
+00C993  1  91 4A           sta  (spCmdList),y
+00C995  1  C8              iny
+00C996  1  D0 E9           bne  iLoop
+00C998  1  E6 4B           inc  spCmdList+1
+00C99A  1  C6 42           dec  pageCount
+00C99C  1  D0 E3           bne  iLoop
+00C99E  1               
+00C99E  1               ; Swap ASCII text data of the Identify data to be more readable.
+00C99E  1               ; These are both on the first page of the data.
+00C99E  1               
+00C99E  1  C6 4B           dec  spCmdList+1
+00C9A0  1  C6 4B           dec  spCmdList+1             ;Point to beginning of buffer
+00C9A2  1               
+00C9A2  1  A0 2E           ldy  #23*2                   ;Start at word 23 (firmware rev, model number)
+00C9A4  1  A2 18           ldx  #24                     ;24 words
+00C9A6  1  20 B2 C9        jsr  SwapBytes
+00C9A9  1               
+00C9A9  1  A0 14           ldy  #10*2                   ;Start at word 10 (serial number)
+00C9AB  1  A2 0A           ldx  #10                     ;10 words
+00C9AD  1  20 B2 C9        jsr  SwapBytes
+00C9B0  1               
+00C9B0  1  18              clc
+00C9B1  1  60              rts
+00C9B2  1               
+00C9B2  1               ;------------------------------------------------------------------------------
+00C9B2  1               SwapBytes:
+00C9B2  1  B1 4A           lda  (spCmdList),y
+00C9B4  1  48              pha                          ;Save the 1st byte
+00C9B5  1  C8              iny
+00C9B6  1  B1 4A           lda  (spCmdList),y           ;Get the 2nd byte
+00C9B8  1  88              dey
+00C9B9  1  91 4A           sta  (spCmdList),y           ;Store it in position 1
+00C9BB  1  C8              iny
+00C9BC  1  68              pla                          ;Finally, retrieve the 1st byte
+00C9BD  1  91 4A           sta  (spCmdList),y           ;Put it in position 2
+00C9BF  1  C8              iny
+00C9C0  1  CA              dex
+00C9C1  1  D0 EF           bne  SwapBytes
+00C9C3  1  60              rts
+00C9C4  1               
+00C9C4  1               ;------------------------------------------------------------------------------
+00C9C4  1               ; SmartPort READ BLOCK command
+00C9C4  1               ;
+00C9C4  1               spReadBlock:
+00C9C4  1  20 29 CA        jsr  SPSetupReadWrite
+00C9C7  1  B0 07           bcs  readDone
+00C9C9  1               
+00C9C9  1  A4 4D           ldy  spSlot
+00C9CB  1  A6 4E           ldx  spSlotX16
+00C9CD  1  4C A8 CB        jmp  ReadBlock
+00C9D0  1               
+00C9D0  1               readDone:
+00C9D0  1               writeDone:
+00C9D0  1  60              rts
+00C9D1  1               
+00C9D1  1               ;------------------------------------------------------------------------------
+00C9D1  1               ; SmartPort WRITE BLOCK command
+00C9D1  1               ;
+00C9D1  1               spWriteBlock:
+00C9D1  1  20 29 CA        jsr SPSetupReadWrite
+00C9D4  1  B0 FA           bcs writeDone
+00C9D6  1               
+00C9D6  1  A4 4D           ldy spSlot
+00C9D8  1  A6 4E           ldx spSlotX16
+00C9DA  1  4C 05 CC        jmp WriteBlock
+00C9DD  1               
+00C9DD  1               ;------------------------------------------------------------------------------
+00C9DD  1               ; SmartPort FORMAT command
+00C9DD  1               ;
+00C9DD  1               ; We don't actually do anything beyond validating the unit number.
+00C9DD  1               ;
+00C9DD  1               spFormat:
+00C9DD  1  4C 74 CA        jmp SPValidateUnitNumber
+00C9E0  1               
+00C9E0  1               ;------------------------------------------------------------------------------
+00C9E0  1               ; SmartPort CONTROL command
+00C9E0  1               ;
+00C9E0  1               spControl:
+00C9E0  1  20 17 CA        jsr SPSetupControlOrStatus
+00C9E3  1  B0 18           bcs ctrlDone
+00C9E5  1               
+00C9E5  1  20 74 CA        jsr SPValidateUnitNumber
+00C9E8  1  B0 13           bcs ctrlDone
+00C9EA  1               
+00C9EA  1  A6 4C           ldx spCSCode
+00C9EC  1  F0 14           beq ctlReset                 ;Control code 0 = Reset
+00C9EE  1  CA              dex
+00C9EF  1  F0 11           beq ctlSetDCB                ;Control code 1 = SetDCB
+00C9F1  1  CA              dex
+00C9F2  1  F0 06           beq ctlSetNewline            ;Control code 2 = SetNewline
+00C9F4  1  CA              dex
+00C9F5  1  F0 07           beq ctlServiceInterrupt      ;Control code 3 = ServiceInterrupt
+00C9F7  1  CA              dex
+00C9F8  1  F0 08           beq ctlEject                 ;Control code 4 = Eject
+00C9FA  1               
+00C9FA  1               ctlSetNewline:
+00C9FA  1  A9 21           lda #$21                     ;Bad control code
+00C9FC  1  38              sec
+00C9FD  1               ctrlDone:
+00C9FD  1  60              rts
+00C9FE  1               
+00C9FE  1               ctlServiceInterrupt:
+00C9FE  1  A9 1F           lda #$1f                     ;Interrupt devices not supported
+00CA00  1  38              sec
+00CA01  1  60              rts
+00CA02  1               
+00CA02  1               ctlReset:
+00CA02  1               ctlSetDCB:
+00CA02  1               ctlEject:
+00CA02  1  18              clc
+00CA03  1  60              rts
+00CA04  1               
+00CA04  1               ;------------------------------------------------------------------------------
+00CA04  1               ; SmartPort INIT command
+00CA04  1               ;
+00CA04  1               ; unit 0 = entire chain
+00CA04  1               ;
+00CA04  1               ;  SmartPort Technote #2 says you can't init an individual unit;
+00CA04  1               ;  so return error if DriveNumber is nonzero.
+00CA04  1               ;
+00CA04  1               spInit:
+00CA04  1  B9 F8 04        lda DriveNumber,y
+00CA07  1  F0 04           beq initChain
+00CA09  1  A9 11           lda #BAD_UNIT_NUMBER
+00CA0B  1  38              sec
+00CA0C  1  60              rts
+00CA0D  1               
+00CA0D  1               initChain:
+00CA0D  1  18              clc
+00CA0E  1  60              rts
+00CA0F  1               
+00CA0F  1               
+00CA0F  1               ;------------------------------------------------------------------------------
+00CA0F  1               ; SmartPort: Open and Close are for character devices only
+00CA0F  1               ;
+00CA0F  1               spOpen:
+00CA0F  1               spClose:
+00CA0F  1  A9 01           lda #PRODOS_BADCMD
+00CA11  1  38              sec
+00CA12  1  60              rts
+00CA13  1               
+00CA13  1               ;------------------------------------------------------------------------------
+00CA13  1               ; SmartPort: Read, Write
+00CA13  1               ;
+00CA13  1               ; We don't bother implementing Read and Write, although they are allowed
+00CA13  1               ; for block devices.  We would only support 512-byte transfers anyway.
+00CA13  1               ;
+00CA13  1               spReadChars:
+00CA13  1               spWriteChars:
+00CA13  1  A9 27           lda #PRODOS_IO_ERROR
+00CA15  1  38              sec
+00CA16  1  60              rts
+00CA17  1               
+00CA17  1               
+00CA17  1               ;------------------------------------------------------------------------------
+00CA17  1               ; SPSetupControlOrStatus
+00CA17  1               ;
+00CA17  1               ; fetch from parameter block:
+00CA17  1               ;    status/control list pointer (word)
+00CA17  1               ;    status/control code (byte)
+00CA17  1               ;
+00CA17  1               SPSetupControlOrStatus:
+00CA17  1  A0 02           ldy #2
+00CA19  1  B1 48           lda (spParamList),y
+00CA1B  1  85 4A           sta spCmdList
+00CA1D  1  C8              iny
+00CA1E  1  B1 48           lda (spParamList),y
+00CA20  1  85 4B           sta spCmdList+1
+00CA22  1  C8              iny
+00CA23  1  B1 48           lda (spParamList),y
+00CA25  1  85 4C           sta spCSCode
+00CA27  1  18              clc
+00CA28  1  60              rts
+00CA29  1               
+00CA29  1               ;------------------------------------------------------------------------------
+00CA29  1               ; SPSetupReadWrite
+00CA29  1               ;
+00CA29  1               ; Input:
+00CA29  1               ;    DriveNumber,y is already a copy of SmartPort unit number
+00CA29  1               ;
+00CA29  1               ; fetch from SP parameter list:
+00CA29  1               ;   buffer pointer
+00CA29  1               ;   block number
+00CA29  1               ;
+00CA29  1               ; Validate unit number:
+00CA29  1               ;   127 = magic, allow any block number
+00CA29  1               ;   1..N:  Validate block number: $0..FFFE
+00CA29  1               ;
+00CA29  1               ; DriveNumber,y: translated unit number in case unit was magic
+00CA29  1               ; DrvMiscFlags: bit 7 set if we should not use BLOCKOFFSET
+00CA29  1               ;
+00CA29  1               SPSetupReadWrite:
+00CA29  1               ; copy pdIOBuffer from parameter list
+00CA29  1  A0 02           ldy #2
+00CA2B  1  B1 48           lda (spParamList),y
+00CA2D  1  85 44           sta pdIOBuffer
+00CA2F  1  C8              iny
+00CA30  1  B1 48           lda (spParamList),y
+00CA32  1  85 45           sta pdIOBuffer+1
+00CA34  1               
+00CA34  1               ; copy pdBlockNumber from parameter list
+00CA34  1  C8              iny
+00CA35  1  B1 48           lda (spParamList),y
+00CA37  1  85 46           sta pdBlockNumber
+00CA39  1  C8              iny
+00CA3A  1  B1 48           lda (spParamList),y
+00CA3C  1  85 47           sta pdBlockNumber+1
+00CA3E  1               
+00CA3E  1               ; Validate the unit number and block number.
+00CA3E  1  A4 4D           ldy spSlot
+00CA40  1  B9 F8 04        lda DriveNumber,y
+00CA43  1  C9 7F           cmp #MagicRawBlocksUnit
+00CA45  1  F0 1A           beq magicUnit
+00CA47  1               
+00CA47  1  20 74 CA        jsr SPValidateUnitNumber
+00CA4A  1  B0 14           bcs srwOut
+00CA4C  1               
+00CA4C  1  A0 06           ldy #6
+00CA4E  1  B1 48           lda (spParamList),y          ;Bits 16..23 of block number must be $00
+00CA50  1  D0 0B           bne badBlockNum
+00CA52  1               
+00CA52  1  A5 47           lda pdBlockNumber+1          ;Block $FFFF is invalid
+00CA54  1  25 46           and pdBlockNumber
+00CA56  1  18              clc
+00CA57  1  69 01           adc #1
+00CA59  1  F0 02           beq badBlockNum
+00CA5B  1  18              clc
+00CA5C  1  60              rts
+00CA5D  1               
+00CA5D  1               badBlockNum:
+00CA5D  1  A9 2D           lda #PRODOS_BADBLOCK         ;Bad block number
+00CA5F  1  38              sec
+00CA60  1               srwOut:
+00CA60  1  60              rts
+00CA61  1               ;
+00CA61  1               ; For the "magic raw blocks" unit, allow a full 3-byte block number.
+00CA61  1               ;
+00CA61  1               magicUnit:
+00CA61  1  A9 80           lda #$80
+00CA63  1  19 78 07        ora DrvMiscFlags,y
+00CA66  1  99 78 07        sta DrvMiscFlags,y           ;Raw block access
+00CA69  1               
+00CA69  1  A0 06           ldy #6
+00CA6B  1  B1 48           lda (spParamList),y          ;Bits 16..23 of block number
+00CA6D  1  A4 4D           ldy spSlot
+00CA6F  1  99 F8 04        sta DriveNumber,y
+00CA72  1  18              clc
+00CA73  1  60              rts
+00CA74  1               
+00CA74  1               ;------------------------------------------------------------------------------
+00CA74  1               ; SPValidateUnitNumber
+00CA74  1               ;
+00CA74  1               ; Validate that DriveNumber is from 1 to N.
+00CA74  1               ;
+00CA74  1               ; Input: DriveNumber
+00CA74  1               ;
+00CA74  1               ; Output: DriveNumber in range 0..N-1
+00CA74  1               ;
+00CA74  1               SPValidateUnitNumber:
+00CA74  1  A4 4D           ldy spSlot
+00CA76  1  B9 F8 04        lda DriveNumber,y
+00CA79  1  F0 0F           beq badUnit
+00CA7B  1  18              clc
+00CA7C  1  E9 01           sbc  #1
+00CA7E  1  99 F8 04        sta DriveNumber,y
+00CA81  1  D9 F8 06        cmp DrvBlkCount2,y
+00CA84  1  F0 02           beq unitOK
+00CA86  1  B0 02           bcs badUnit
+00CA88  1               unitOK:
+00CA88  1  18              clc
+00CA89  1  60              rts
+00CA8A  1               
+00CA8A  1               badUnit:
+00CA8A  1  A9 11           lda #BAD_UNIT_NUMBER
+00CA8C  1  38              sec
+00CA8D  1  60              rts
+00CA8E  1               
+00CA8E  1               ;------------------------------------------------------------------------------
+00CA8E  1               ; P8AuxROM - Handle a ProDOS call
+00CA8E  1               ;
+00CA8E  1               P8AuxROM:
+00CA8E  1               
+00CA8E  1               ; If the ProDOS unit number doesn't match our slot number, add 2 to
+00CA8E  1               ; the drive number.
+00CA8E  1               ;
+00CA8E  1               ; This actually happens: If we're in slot 5, we get calls for slot 2
+00CA8E  1               ; that want to access our 3rd and 4th partitions.
+00CA8E  1  8A              txa                          ; A = $n0
+00CA8F  1  45 43           eor  pdUnitNumber
+00CA91  1  29 70           and  #$70                    ;EOR the slot number
+00CA93  1  F0 02           beq  OurSlot
+00CA95  1  A9 02           lda  #2                      ;Point to drive 3 or 4
+00CA97  1               
+00CA97  1               OurSlot:
+00CA97  1  24 43           bit  pdUnitNumber
+00CA99  1  10 03           bpl  DriveOne
+00CA9B  1  18              clc
+00CA9C  1  69 01           adc  #1
+00CA9E  1               
+00CA9E  1               DriveOne:
+00CA9E  1  99 F8 04        sta  DriveNumber,y
+00CAA1  1  A9 00           lda  #0
+00CAA3  1  99 78 07        sta  DrvMiscFlags,y          ;no special flags (such as raw block access)
+00CAA6  1               
+00CAA6  1  20 C4 CA        jsr  ResetDriveIfFirstTime
+00CAA9  1               
+00CAA9  1               ; process the command code and jump to appropriate routine.
+00CAA9  1               
+00CAA9  1               .IF DEBUG
+00CAA9  1               ;warning this debug code trashes the Acc register
+00CAA9  1                  jsr  DSString
+00CAA9  1                  .byte "P8:",0
+00CAA9  1               .ENDIF
+00CAA9  1               
+00CAA9  1  A5 42           lda  pdCommandCode
+00CAAB  1  C9 01           cmp  #PRODOS_READ
+00CAAD  1  D0 03           bne  chk1
+00CAAF  1  4C A8 CB        jmp  ReadBlock
+00CAB2  1               
+00CAB2  1               chk1:
+00CAB2  1  C9 02           cmp  #PRODOS_WRITE
+00CAB4  1  D0 03           bne  chk2
+00CAB6  1  4C 05 CC        jmp  WriteBlock
+00CAB9  1               
+00CAB9  1               chk2:
+00CAB9  1  C9 00           cmp  #PRODOS_STATUS
+00CABB  1  D0 03           bne  chk3
+00CABD  1  4C ED CA        jmp  GetStatus
+00CAC0  1               
+00CAC0  1               chk3:
+00CAC0  1               ; An invalid request # has been sent to this driver.
+00CAC0  1               ;
+00CAC0  1               .IF DEBUG
+00CAC0  1                  pha
+00CAC0  1                  jsr DSString
+00CAC0  1                  .byte "CE",0
+00CAC0  1                  pla
+00CAC0  1                  jsr  DSByteCRLF
+00CAC0  1               .ENDIF
+00CAC0  1               
+00CAC0  1  A9 27           lda  #PRODOS_IO_ERROR
+00CAC2  1  38              sec
+00CAC3  1  60              rts                             ;return to caller. Should always be ProDOS
+00CAC4  1               
+00CAC4  1               ;------------------------------------------------------------------------------
+00CAC4  1               ; ResetDriveIfFirstTime - Reset the drive once, the first time the driver
+00CAC4  1               ; is called ide_devctrl Bit 2 = Software Reset, Bit 1 = nIEN (enable
+00CAC4  1               ; assertion of INTRQ)
+00CAC4  1               ;
+00CAC4  1               ; Input:
+00CAC4  1               ;       X = requested slot number in form $n0 where n = slot 1 to 7
+00CAC4  1               ;       Y = $0n (n = slot#) for accessing scratchpad RAM;
+00CAC4  1               ;
+00CAC4  1               ; ZeroPage Usage:
+00CAC4  1               ;       None
+00CAC4  1               ;
+00CAC4  1               ; CPU Registers changed:  A, P
+00CAC4  1               ;
+00CAC4  1               ResetDriveIfFirstTime:
+00CAC4  1  B9 78 04        lda  DriveResetDone,Y
+00CAC7  1  C9 A5           cmp  #INITDONESIG
+00CAC9  1  F0 21           beq  resetOK
+00CACB  1               ;
+00CACB  1               ; Reset the ATA device
+00CACB  1               ;
+00CACB  1  A9 00           lda  #0
+00CACD  1  9D 80 C0        sta  ATADataHigh,x           ;Clear high byte data latch
+00CAD0  1               
+00CAD0  1  A9 06           lda  #$06                    ;Reset bit=1, Disable INTRQ=1
+00CAD2  1  9D 86 C0        sta  ATADevCtrl,x
+00CAD5  1               ;
+00CAD5  1               ; Per ATA-6 spec, need to wait 5us minimum. Use a delay of 100us.
+00CAD5  1               ; Should cover accelerated Apples up to 20Mhz.
+00CAD5  1               ;
+00CAD5  1  A9 04           lda  #WAIT_100us
+00CAD7  1  20 C5 CC        jsr  Wait
+00CADA  1               
+00CADA  1  A9 02           lda  #$02                    ;Reset bit=0, Disable INTRQ=1
+00CADC  1  9D 86 C0        sta  ATADevCtrl,x
+00CADF  1               ;
+00CADF  1               ; Per ATA-6 spec, need to wait 2ms minimum. Use a delay of 40ms.
+00CADF  1               ; Should cover accelerated Apples up to 20Mhz.
+00CADF  1               ;
+00CADF  1  A9 7C           lda  #WAIT_40ms
+00CAE1  1  20 C5 CC        jsr  Wait
+00CAE4  1               ;
+00CAE4  1               ; Per ATA-6 spec, wait for busy to clear, by calling IDEWaitReady
+00CAE4  1               ;
+00CAE4  1  20 95 CC        jsr  IDEWaitReady
+00CAE7  1               
+00CAE7  1  A9 A5           lda  #INITDONESIG
+00CAE9  1  99 78 04        sta  DriveResetDone,Y        ;Set the init done flag so init only happens
+00CAEC  1                                               ; once.
+00CAEC  1               resetOK:
+00CAEC  1  60              rts
+00CAED  1               
+00CAED  1               ;------------------------------------------------------------------------------
+00CAED  1               ; GetStatus - Called by ProDOS and SmartPort to get device status and size
+00CAED  1               ;
+00CAED  1               ; Input:
+00CAED  1               ;       DriveNumber,y (0 to 3)
+00CAED  1               ;       X = slot number in form $n0 where n = slot 1 to 7
+00CAED  1               ;       Y = $0n (n = slot#) for accessing scratchpad RAM;
+00CAED  1               ;
+00CAED  1               ; Output:
+00CAED  1               ;       A = ProDOS status return code
+00CAED  1               ;       X = drive size LSB
+00CAED  1               ;       Y = drive size MSB
+00CAED  1               ;       Carry flag: 0 = Okay, 1 = Error
+00CAED  1               ;       DrvBlkCount0..DrvBlkCount2 = usable blocks on device
+00CAED  1               ;
+00CAED  1               GetStatus:
+00CAED  1               
+00CAED  1               .IF DEBUG
+00CAED  1               ;warning this debug code trashes the Acc register
+00CAED  1                  jsr  DSString
+00CAED  1                  .byte " St",0
+00CAED  1                  jsr  DisplayParms
+00CAED  1               .ENDIF
+00CAED  1               
+00CAED  1               ;
+00CAED  1               ; Determine if a drive/device is present.
+00CAED  1               ;
+00CAED  1  20 9F CC        jsr  CheckDevice
+00CAF0  1  90 0A           bcc  sDriveOK
+00CAF2  1               
+00CAF2  1  A2 00           ldx  #$00
+00CAF4  1  A0 00           ldy  #$00
+00CAF6  1  A9 2F           lda  #PRODOS_OFFLINE
+00CAF8  1  38              sec
+00CAF9  1  4C A7 CB        jmp  sExit
+00CAFC  1               
+00CAFC  1               ; Device is present
+00CAFC  1               sDriveOK:
+00CAFC  1  A9 00           lda  #0
+00CAFE  1  9D 80 C0        sta  ATADataHigh,x           ;clear high byte transfer latch
+00CB01  1               
+00CB01  1  20 95 CC        jsr  IDEWaitReady
+00CB04  1  A9 EC           lda  #ATAIdentify
+00CB06  1  9D 8F C0        sta  ATACommand,x            ;Issue the read command to the drive
+00CB09  1  20 95 CC        jsr  IDEWaitReady            ;Wait for BUSY flag to go away
+00CB0C  1               
+00CB0C  1  BD 8F C0        lda  ATAStatus,x             ;Check for error response
+00CB0F  1  29 09           and  #$09
+00CB11  1  C9 01           cmp  #$01                     ;if DRQ=0 and ERR=1 an error occured
+00CB13  1  D0 0A           bne  sValidATACommand
+00CB15  1               
+00CB15  1               .IF DEBUG
+00CB15  1               ;warning this debug code trashes the Acc register
+00CB15  1                  jsr DSString
+00CB15  1                  .byte " Idfy Err:",0
+00CB15  1                  lda  ATAError,x
+00CB15  1                  jsr  DSByteCRLF
+00CB15  1               .ENDIF
+00CB15  1               
+00CB15  1  A2 00           ldx  #0
+00CB17  1  A0 00           ldy  #0
+00CB19  1  A9 27           lda  #PRODOS_IO_ERROR
+00CB1B  1  38              sec
+00CB1C  1  4C A7 CB        jmp  sExit                   ; Command Error occured, return error
+00CB1F  1               
+00CB1F  1               sValidATACommand:
+00CB1F  1  98              tya
+00CB20  1  48              pha                          ;save Y, it holds the $0n sratchpad RAM offset
+00CB21  1  A0 00           ldy  #$00                    ;zero loop counter
+00CB23  1               
+00CB23  1               sPrefetchloop:
+00CB23  1  20 95 CC        jsr  IDEWaitReady            ;See if a word is ready
+00CB26  1  B0 07           bcs  sWordRdy
+00CB28  1  68              pla
+00CB29  1  A8              tay
+00CB2A  1  A9 27           lda  #PRODOS_IO_ERROR
+00CB2C  1  4C A7 CB        jmp  sExit
+00CB2F  1               
+00CB2F  1               sWordRdy:
+00CB2F  1  BD 88 C0        lda  ATADataLow,x            ;Read words 0 thru 56 but throw them away
+00CB32  1  C8              iny
+00CB33  1  C0 39           cpy  #57                     ;Number of the last word you want to throw away
+00CB35  1  D0 EC           bne  sPrefetchloop
+00CB37  1  68              pla
+00CB38  1  A8              tay
+00CB39  1               
+00CB39  1               sPrefetchDone:
+00CB39  1  BD 88 C0        lda  ATADataLow,x            ;Read the current capacity in sectors (LBA)
+00CB3C  1  38              sec
+00CB3D  1  E9 00           sbc  #BLOCKOFFSET
+00CB3F  1  99 F8 05        sta  DrvBlkCount0,y
+00CB42  1  BD 80 C0        lda  ATADataHigh,x
+00CB45  1  E9 00           sbc  #0
+00CB47  1  99 78 06        sta  DrvBlkCount1,y
+00CB4A  1  BD 88 C0        lda  ATADataLow,x
+00CB4D  1  E9 00           sbc  #0
+00CB4F  1  99 F8 06        sta  DrvBlkCount2,y
+00CB52  1               
+00CB52  1               
+00CB52  1               .IF DEBUG
+00CB52  1                  jsr  DSString
+00CB52  1                  .byte "Size:",0
+00CB52  1               
+00CB52  1                  lda  ATADataHigh,x           ;get the high byte of high word just for display
+00CB52  1                  jsr  DSByte
+00CB52  1                  lda  DrvBlkCount2,y
+00CB52  1                  jsr  DSByte
+00CB52  1                  lda  DrvBlkCount1,y
+00CB52  1                  jsr  DSByte
+00CB52  1                  lda  DrvBlkCount0,y
+00CB52  1                  jsr  DSByte
+00CB52  1                  jsr  DSBlank
+00CB52  1               .ENDIF
+00CB52  1               
+00CB52  1  B9 F8 06        lda  DrvBlkCount2,y
+00CB55  1  C9 04           cmp  #PARTITIONS32MB         ;max out at (#PARTITIONS32MB * $10000 + 00FFFF)
+00CB57  1                                               ; blocks
+00CB57  1  B0 05           bcs  maxOutAtN
+00CB59  1               
+00CB59  1  BD 80 C0        lda  ATADataHigh,x
+00CB5C  1  F0 0D           beq  lessThan8GB
+00CB5E  1               maxOutAtN:
+00CB5E  1  A9 FF           lda  #$FF                    ;The device is truly huge! Just set our 3-byte
+00CB60  1                                               ; block count to $03FFFF
+00CB60  1  99 F8 05        sta  DrvBlkCount0,y
+00CB63  1  99 78 06        sta  DrvBlkCount1,y
+00CB66  1  A9 03           lda  #PARTITIONS32MB-1       ;Number of 32MB devices, set by the equate:
+00CB68  1                                               ; #PARTITIONS32MB
+00CB68  1  99 F8 06        sta  DrvBlkCount2,y
+00CB6B  1               lessThan8GB:
+00CB6B  1               
+00CB6B  1               
+00CB6B  1               PostFetch:
+00CB6B  1  20 95 CC        jsr IDEWaitReady             ;read the rest of the words, until command ends
+00CB6E  1  90 06           bcc sReadComplete
+00CB70  1  BD 88 C0        lda ATADataLow,x
+00CB73  1  4C 6B CB        jmp PostFetch
+00CB76  1               sReadComplete:
+00CB76  1               
+00CB76  1               ; DrvBlkCount2 is the number of 32 MB partitions availiable - 1,
+00CB76  1               ; or the highest drive # supported (zero based).
+00CB76  1               ;
+00CB76  1               ; If DrvBlkCount2 > drive # then StatusSize = $FFFF
+00CB76  1               ; If DrvBlkCount2 = drive # then StatusSize = DrvBlkCount1,DrvBlkCount0
+00CB76  1               ; If DrvBlkCount2 < drive # then StatusSize = 0
+00CB76  1               ;
+00CB76  1               ; This scheme has a special case which must be handled because ProDOS
+00CB76  1               ;   partitions are not quite 32 meg in size but are only FFFF blocks in size.
+00CB76  1               ;   If a device is exactly: 32meg or 10000h blocks in size, it would appear
+00CB76  1               ;   as one drive of size FFFF and another drive of size 0000. To handle this
+00CB76  1               ;   case, we check for an exact size of 0000 and fall into the NoDrive code.
+00CB76  1               ;
+00CB76  1  B9 F8 04        lda DriveNumber,y
+00CB79  1  D9 F8 06        cmp DrvBlkCount2,y
+00CB7C  1  F0 0C           beq ExactSize
+00CB7E  1  90 20           bcc FullSize
+00CB80  1               
+00CB80  1               NoDrive:
+00CB80  1  A2 00           ldx  #0
+00CB82  1  A0 00           ldy  #0
+00CB84  1  A9 2F           lda  #PRODOS_OFFLINE
+00CB86  1  38              sec
+00CB87  1  4C A7 CB        jmp  sExit
+00CB8A  1               
+00CB8A  1               ExactSize:                    ;If equal, the DrvBlkCount1,DrvBlkCount0 is the
+00CB8A  1                                             ; drive's exact size
+00CB8A  1  B9 F8 05        lda  DrvBlkCount0,y
+00CB8D  1  19 78 06        ora  DrvBlkCount1,y
+00CB90  1  F0 EE           beq  NoDrive               ;can't have a 0-block device
+00CB92  1               
+00CB92  1  B9 F8 05        lda  DrvBlkCount0,y
+00CB95  1  AA              tax
+00CB96  1  B9 78 06        lda  DrvBlkCount1,y
+00CB99  1  A8              tay
+00CB9A  1  A9 00           lda  #0
+00CB9C  1  18              clc                          ;no errors
+00CB9D  1  4C A7 CB        jmp  sExit
+00CBA0  1               
+00CBA0  1               FullSize:
+00CBA0  1  A2 FF           ldx  #$FF                    ;X gets low byte of size
+00CBA2  1  A0 FF           ldy  #$FF                    ;Y gets high byte of size
+00CBA4  1  A9 00           lda  #0
+00CBA6  1  18              clc                          ;no errors
+00CBA7  1               
+00CBA7  1               sExit:
+00CBA7  1               .IF DEBUG
+00CBA7  1                  php                          ;save the carry's state
+00CBA7  1                  pha                          ;save the accumulator
+00CBA7  1                  jsr  DSString
+00CBA7  1                  .byte "Retd:",0
+00CBA7  1                  tya
+00CBA7  1                  jsr  DSByte
+00CBA7  1                  txa
+00CBA7  1                  jsr  DSByteCRLF
+00CBA7  1                  pla
+00CBA7  1                  plp                          ;recover the carry
+00CBA7  1               .ENDIF
+00CBA7  1               
+00CBA7  1  60              rts
+00CBA8  1               
+00CBA8  1               ;------------------------------------------------------------------------------
+00CBA8  1               ; ReadBlock - Read a block from device into memory
+00CBA8  1               ;
+00CBA8  1               ; Input:
+00CBA8  1               ;       pd Command Block Data $42 - $47
+00CBA8  1               ;       X = requested slot number in form $n0 where n = slot 1 to 7
+00CBA8  1               ;
+00CBA8  1               ; Output:
+00CBA8  1               ;       A = ProDOS read return code
+00CBA8  1               ;       Carry flag: 0 = Okay, 1 = Error
+00CBA8  1               ;
+00CBA8  1               ; ZeroPage Usage:
+00CBA8  1               ;       $EF
+00CBA8  1               ;       w/DEBUG enabled: $EB, $EC, $ED, $EE
+00CBA8  1               ;       Note: location $EF is saved and restored before driver exits
+00CBA8  1               ;
+00CBA8  1               ReadBlock:
+00CBA8  1               .IF DEBUG
+00CBA8  1                  jsr  DSString
+00CBA8  1                  .byte " Rd",0
+00CBA8  1                  jsr  DisplayParms
+00CBA8  1               .ENDIF
+00CBA8  1               
+00CBA8  1  A5 45           lda  pdIOBufferH
+00CBAA  1  48              pha
+00CBAB  1  A5 EF           lda  zpt1
+00CBAD  1  48              pha
+00CBAE  1               
+00CBAE  1               .IF DEBUG
+00CBAE  1                  lda  CheckSumHigh
+00CBAE  1                  pha
+00CBAE  1                  lda  CheckSumLow
+00CBAE  1                  pha
+00CBAE  1               .ENDIF
+00CBAE  1               
+00CBAE  1  20 BA CB        jsr ReadBlockCore
+00CBB1  1  AA              tax                              ; ver1.3: Save Acc
+00CBB2  1               
+00CBB2  1               .IF DEBUG
+00CBB2  1                  pla
+00CBB2  1                  sta  CheckSumLow
+00CBB2  1                  pla
+00CBB2  1                  sta  CheckSumHigh
+00CBB2  1               .ENDIF
+00CBB2  1               
+00CBB2  1  68              pla
+00CBB3  1  85 EF           sta  zpt1
+00CBB5  1  68              pla
+00CBB6  1  85 45           sta  pdIOBufferH
+00CBB8  1  8A              txa                              ; ver1.3: restore Acc
+00CBB9  1  60              rts
+00CBBA  1               
+00CBBA  1               ReadBlockCore:
+00CBBA  1               .IF DEBUG
+00CBBA  1                  lda  #0
+00CBBA  1                  sta  CheckSumLow
+00CBBA  1                  sta  CheckSumHigh
+00CBBA  1               .ENDIF
+00CBBA  1               
+00CBBA  1  20 95 CC        jsr  IDEWaitReady
+00CBBD  1  20 6A CC        jsr  Block2LBA               ;Program the device's task file registers
+00CBC0  1                                               ; based on ProDOS address
+00CBC0  1               
+00CBC0  1  A9 00           lda  #0
+00CBC2  1  9D 80 C0        sta  ATADataHigh,x
+00CBC5  1               
+00CBC5  1  A9 20           lda  #ATACRead
+00CBC7  1  9D 8F C0        sta  ATACommand,x            ;Issue the read command to the drive
+00CBCA  1  20 95 CC        jsr  IDEWaitReady            ;Wait for BUSY flag to clear
+00CBCD  1               
+00CBCD  1  BD 8F C0        lda  ATAStatus,x             ;Check for error response from device
+00CBD0  1  29 09           and  #$09
+00CBD2  1  C9 01           cmp  #$01                    ;If DRQ=0 and ERR=1 a device error occured
+00CBD4  1  D0 04           bne  rCommandOK
+00CBD6  1               
+00CBD6  1               .IF DEBUG
+00CBD6  1               ;warning this debug code trashes the Acc register
+00CBD6  1                  jsr DSString
+00CBD6  1                  .byte " Err!",0
+00CBD6  1                  lda  ATAError,x
+00CBD6  1                  jsr  DSByteCRLF
+00CBD6  1               .ENDIF
+00CBD6  1               
+00CBD6  1               ;
+00CBD6  1               ; The drive has returned an error code. Just return I/O error code to PRODOS
+00CBD6  1               ;
+00CBD6  1  A9 27           lda  #PRODOS_IO_ERROR
+00CBD8  1  38              sec
+00CBD9  1  60              rts
+00CBDA  1               ;
+00CBDA  1               ; Sector is ready to read
+00CBDA  1               ;
+00CBDA  1               rCommandOK:
+00CBDA  1  A0 02           ldy  #2
+00CBDC  1  84 EF           sty  zpt1
+00CBDE  1  A0 00           ldy  #0
+00CBE0  1               
+00CBE0  1               rLoop:
+00CBE0  1  BD 8F C0        lda  ATAStatus,x             ;Note: not using IDEWaitReady, using inline code
+00CBE3  1  30 FB           bmi  rLoop                   ;Wait for BUSY (bit 7) to be zero
+00CBE5  1  29 08           and  #$08                    ;get DRQ status bit
+00CBE7  1  F0 18           beq  rShort                  ;if off, didn't get enough data
+00CBE9  1               
+00CBE9  1  BD 88 C0        lda  ATADataLow,x
+00CBEC  1  91 44           sta  (pdIOBuffer),y
+00CBEE  1  C8              iny
+00CBEF  1               
+00CBEF  1               .IF DEBUG
+00CBEF  1                  clc
+00CBEF  1                  adc  CheckSumLow
+00CBEF  1                  sta  CheckSumLow
+00CBEF  1               .ENDIF
+00CBEF  1               
+00CBEF  1  BD 80 C0        lda  ATADataHigh,x
+00CBF2  1  91 44           sta  (pdIOBuffer),y
+00CBF4  1               
+00CBF4  1               .IF DEBUG
+00CBF4  1                  adc CheckSumHigh
+00CBF4  1                  sta CheckSumHigh
+00CBF4  1               .ENDIF
+00CBF4  1               
+00CBF4  1  C8              iny
+00CBF5  1  D0 E9           bne  rLoop
+00CBF7  1  E6 45           inc  pdIOBufferH
+00CBF9  1  C6 EF           dec  zpt1
+00CBFB  1  D0 E3           bne  rLoop
+00CBFD  1               
+00CBFD  1               .IF DEBUG
+00CBFD  1                  jsr  DSString
+00CBFD  1                  .byte " Chk$",0
+00CBFD  1               
+00CBFD  1                  lda  CheckSumHigh
+00CBFD  1                  jsr  DSByte
+00CBFD  1                  lda  CheckSumLow
+00CBFD  1                  jsr  DSByteCRLF
+00CBFD  1               .ENDIF
+00CBFD  1               
+00CBFD  1  A9 00           lda  #0
+00CBFF  1  18              clc
+00CC00  1  60              rts
+00CC01  1               ;
+00CC01  1               ; The Block was short, return I/O error code to PRODOS
+00CC01  1               ;
+00CC01  1               rShort:
+00CC01  1               .IF DEBUG
+00CC01  1                  jsr  DSString
+00CC01  1                  .byte " Short blk", 0
+00CC01  1               
+00CC01  1                  lda  zpt1
+00CC01  1                  jsr  DSByte
+00CC01  1                  tya
+00CC01  1                  jsr  DSByteCRLF
+00CC01  1               .ENDIF
+00CC01  1               
+00CC01  1  A9 27           lda #PRODOS_IO_ERROR
+00CC03  1  38              sec
+00CC04  1  60              rts
+00CC05  1               
+00CC05  1               ;------------------------------------------------------------------------
+00CC05  1               ; WriteBlock - Write a block in memory to device
+00CC05  1               ;
+00CC05  1               ; Input:
+00CC05  1               ;       pd Command Block Data $42 - $47
+00CC05  1               ;       X = requested slot number in form $n0 where n = slot 1 to 7
+00CC05  1               ;
+00CC05  1               ; Output:
+00CC05  1               ;       A = ProDOS write return code
+00CC05  1               ;       Carry flag: 0 = Okay, 1 = Error
+00CC05  1               ;
+00CC05  1               ; ZeroPage Usage:
+00CC05  1               ;       $EF
+00CC05  1               ;       w/DEBUG enabled: $EB, $EC, $ED, $EE
+00CC05  1               ;       Note: location $EF is saved and restored before driver exits
+00CC05  1               ;
+00CC05  1               WriteBlock:
+00CC05  1               .IF DEBUG
+00CC05  1                  jsr  DSString
+00CC05  1                  .byte " Wt",0
+00CC05  1                  jsr  DisplayParms
+00CC05  1               .ENDIF
+00CC05  1               
+00CC05  1  A5 45           lda  pdIOBufferH
+00CC07  1  48              pha
+00CC08  1  A5 EF           lda  zpt1
+00CC0A  1  48              pha
+00CC0B  1               
+00CC0B  1               .IF DEBUG
+00CC0B  1                  lda  CheckSumHigh
+00CC0B  1                  pha
+00CC0B  1                  lda  CheckSumLow
+00CC0B  1                  pha
+00CC0B  1               .ENDIF
+00CC0B  1               
+00CC0B  1  20 17 CC        jsr  WriteBlockCore
+00CC0E  1  AA              tax
+00CC0F  1               .IF DEBUG
+00CC0F  1                  pla
+00CC0F  1                  sta  CheckSumLow
+00CC0F  1                  pla
+00CC0F  1                  sta  CheckSumHigh
+00CC0F  1               .ENDIF
+00CC0F  1               
+00CC0F  1  68              pla
+00CC10  1  85 EF           sta  zpt1
+00CC12  1  68              pla
+00CC13  1  85 45           sta  pdIOBufferH
+00CC15  1  8A              txa
+00CC16  1  60              rts
+00CC17  1               
+00CC17  1               WriteBlockCore:
+00CC17  1               .IF DEBUG
+00CC17  1                  lda  #0
+00CC17  1                  sta  CheckSumLow
+00CC17  1                  sta  CheckSumHigh
+00CC17  1               .ENDIF
+00CC17  1               
+00CC17  1  A9 00           lda  #0
+00CC19  1  9D 80 C0        sta  ATADataHigh,x           ;Clear the high byte of the 16 bit interface
+00CC1C  1                                               ; data latch
+00CC1C  1               
+00CC1C  1  20 95 CC        jsr  IDEWaitReady
+00CC1F  1  20 6A CC        jsr  Block2LBA               ;program IDE task file
+00CC22  1               
+00CC22  1               ; Write sector from RAM
+00CC22  1  A9 30           lda  #ATACWrite
+00CC24  1  9D 8F C0        sta  ATACommand,x
+00CC27  1  20 95 CC        jsr  IDEWaitReady
+00CC2A  1               
+00CC2A  1  BD 8F C0        lda  ATAStatus,x              ;Check for error response from writing command
+00CC2D  1  29 09           and  #$09
+00CC2F  1  C9 01           cmp  #$01                     ;if DRQ=0 and ERR=1 an error occured
+00CC31  1  D0 04           bne  wCommandOK
+00CC33  1               
+00CC33  1               .IF DEBUG
+00CC33  1               ;warning this debug code trashes the Acc register
+00CC33  1                  jsr DSString
+00CC33  1                  .byte " Err!:",0
+00CC33  1                  lda  ATAError,x
+00CC33  1                  jsr  DSByteCRLF
+00CC33  1               .ENDIF
+00CC33  1               
+00CC33  1               ; The drive has returned an error code. Just return I/O error code to PRODOS
+00CC33  1               ;
+00CC33  1  A9 27           lda  #PRODOS_IO_ERROR
+00CC35  1  38              sec
+00CC36  1  60              rts
+00CC37  1               ;
+00CC37  1               ; Sector is ready to write
+00CC37  1               ;
+00CC37  1               wCommandOK:
+00CC37  1  A0 02           ldy  #2
+00CC39  1  84 EF           sty  zpt1
+00CC3B  1  A0 00           ldy  #0
+00CC3D  1               
+00CC3D  1               wLoop:
+00CC3D  1  BD 8F C0        lda  ATAStatus,x             ;Note: not using IDEWaitReady, using inline code
+00CC40  1  30 FB           bmi  wLoop                   ;Wait for BUSY (bit 7) to be zero
+00CC42  1  29 08           and  #$08                    ;get DRQ status bit
+00CC44  1  F0 20           beq  wShort                  ;if off, didn't get enough data
+00CC46  1               
+00CC46  1  B1 44           lda  (pdIOBuffer),y
+00CC48  1  48              pha
+00CC49  1               
+00CC49  1               .IF DEBUG
+00CC49  1                  clc
+00CC49  1                  adc  CheckSumLow
+00CC49  1                  sta  CheckSumLow
+00CC49  1               .ENDIF
+00CC49  1               
+00CC49  1  C8              iny
+00CC4A  1  B1 44           lda  (pdIOBuffer),y
+00CC4C  1  9D 80 C0        sta  ATADataHigh,x
+00CC4F  1               
+00CC4F  1               .IF DEBUG
+00CC4F  1                  adc  CheckSumHigh
+00CC4F  1                  sta  CheckSumHigh
+00CC4F  1               .ENDIF
+00CC4F  1               
+00CC4F  1  BD 81 C0        lda  SetCSMask,x             ;any access sets mask bit to block IDE -CS0 on
+00CC52  1                                               ; I/O read to drive
+00CC52  1  68              pla
+00CC53  1  9D 88 C0        sta  ATADataLow,x            ;Remember that all write cycles are
+00CC56  1                                               ; preceded by a read cycle on the 6502
+00CC56  1  BD 82 C0        lda  ClearCSMask,x           ;Set back to normal, allow CS0 assertions on
+00CC59  1                                               ; read cycles
+00CC59  1               
+00CC59  1  C8              iny
+00CC5A  1  D0 E1           bne  wLoop
+00CC5C  1  E6 45           inc  pdIOBufferH
+00CC5E  1  C6 EF           dec  zpt1
+00CC60  1  D0 DB           bne  wLoop
+00CC62  1               
+00CC62  1               .IF DEBUG
+00CC62  1               ; Display the Checksum
+00CC62  1               ; warning this debug code trashes the Acc register
+00CC62  1                  jsr  DSString
+00CC62  1                  .byte " Chk$",0
+00CC62  1                  lda  CheckSumHigh
+00CC62  1                  jsr  DSByte
+00CC62  1                  lda  CheckSumLow
+00CC62  1                  jsr  DSByteCRLF
+00CC62  1               .ENDIF
+00CC62  1               
+00CC62  1  A9 00           lda  #0
+00CC64  1  18              clc
+00CC65  1  60              rts
+00CC66  1               ;
+00CC66  1               ; The Block was short, return I/O error code to PRODOS
+00CC66  1               ;
+00CC66  1               wShort:
+00CC66  1               .IF DEBUG
+00CC66  1               ; Display "W:Short"
+00CC66  1                  jsr  DSString
+00CC66  1                  .byte " W:Shrt:", 0
+00CC66  1               
+00CC66  1                  lda  zpt1
+00CC66  1                  jsr  DSByte
+00CC66  1                  tya
+00CC66  1                  jsr  DSByteCRLF
+00CC66  1               .ENDIF
+00CC66  1               
+00CC66  1  A9 27           lda  #PRODOS_IO_ERROR
+00CC68  1  38              sec
+00CC69  1  60              rts
+00CC6A  1               
+00CC6A  1               ;------------------------------------------------------------------------------
+00CC6A  1               ; Block2LBA - Translates ProDOS block# into LBA and programs devices' task file
+00CC6A  1               ;             registers.
+00CC6A  1               ;
+00CC6A  1               ; Input:
+00CC6A  1               ;       pd Command Block Data $42 - $47
+00CC6A  1               ;       X = requested slot number in form $n0 where n = slot 1 to 7
+00CC6A  1               ;       Y = $0n (n = slot#) for accessing scratchpad RAM;
+00CC6A  1               ;
+00CC6A  1               ; Ouput:
+00CC6A  1               ;       None
+00CC6A  1               ;
+00CC6A  1               ; ZeroPage Usage:
+00CC6A  1               ;       None
+00CC6A  1               ;
+00CC6A  1               ; CPU Registers changed:  A, P
+00CC6A  1               ;
+00CC6A  1               ; This function translates the block number sent in the PRODOS request
+00CC6A  1               ; packet, into an ATA Logical Block Address (LBA).
+00CC6A  1               ; The least significant 16 bits becomes the ProDOS block#.
+00CC6A  1               ; The most significant 16 becomes the ProDOS Drive #
+00CC6A  1               ;
+00CC6A  1               ; A ProDOS block and a ATA sector are both 512 bytes.
+00CC6A  1               ;
+00CC6A  1               ; Logical Block Mode, the Logical Block Address is interpreted as follows:
+00CC6A  1               ; LBA07-LBA00: Sector Number Register D7-D0.
+00CC6A  1               ; LBA15-LBA08: Cylinder Low Register D7-D0.
+00CC6A  1               ; LBA23-LBA16: Cylinder High Register D7-D0.
+00CC6A  1               ; LBA27-LBA24: Drive/Head Register bits HS3-HS0.
+00CC6A  1               
+00CC6A  1               
+00CC6A  1               Block2LBA:
+00CC6A  1               
+00CC6A  1  A9 E0           lda  #$E0                    ;1, (LBA), 1, (Drive), LBA 27-24, where LBA=1,
+00CC6C  1                                               ; Drive=0
+00CC6C  1  9D 8E C0        sta  ATAHead,x               ;Talk to the Master device and use LBA mode.
+00CC6F  1                                               ; Remember that this write will seen by both
+00CC6F  1                                               ; the master and slave devices.
+00CC6F  1               ;
+00CC6F  1               ; Add BLOCKOFFSET to the ProDOS block number to offset the first drive block we
+00CC6F  1               ; use. This keeps the device's first BLOCKOFFSET blocks free, which usually
+00CC6F  1               ; includes a MBR at block 0.
+00CC6F  1               ;
+00CC6F  1  B9 78 07        lda  DrvMiscFlags,y           ; bit 7 = raw block access
+00CC72  1  29 80           and  #$80
+00CC74  1  49 80           eor  #$80
+00CC76  1  F0 02           beq  rawBlocks
+00CC78  1  A9 00           lda  #BLOCKOFFSET
+00CC7A  1               rawBlocks:                      ; A = $00 or BLOCKOFFSET
+00CC7A  1  18              clc
+00CC7B  1  65 46           adc  pdBlockNumber
+00CC7D  1  9D 8B C0        sta  ATASector,x             ;store ProDOS Low block # into LBA 0-7
+00CC80  1               
+00CC80  1  A5 47           lda  pdBlockNumberH
+00CC82  1  69 00           adc  #0                      ;account for any overflow in LBA 0-7
+00CC84  1  9D 8C C0        sta  ATACylinder,x           ;store ProDOS High block # into LBA 15-8
+00CC87  1               
+00CC87  1  B9 F8 04        lda DriveNumber,y
+00CC8A  1  69 00           adc #0                        ;account for overflow from LBA 8-15
+00CC8C  1  9D 8D C0        sta ATACylinderH,x            ;store LBA bits 23-16
+00CC8F  1               
+00CC8F  1  A9 01           lda #1
+00CC91  1  9D 8A C0        sta ATASectorCnt,x
+00CC94  1  60              rts
+00CC95  1               
+00CC95  1               ;------------------------------------------------------------------------------
+00CC95  1               ; IDEWaitReady - Waits for BUSY flag to clear, and returns DRQ bit status
+00CC95  1               ;
+00CC95  1               ; Input:
+00CC95  1               ;       X = requested slot number in form $n0 where n = slot 1 to 7
+00CC95  1               ; Ouput:
+00CC95  1               ;       Carry flag = DRQ status bit
+00CC95  1               ;
+00CC95  1               ; ZeroPage Usage:
+00CC95  1               ;       None
+00CC95  1               ;
+00CC95  1               ; CPU Registers changed:  A, P
+00CC95  1               ;
+00CC95  1               IDEWaitReady:
+00CC95  1  BD 8F C0        lda  ATAStatus,x
+00CC98  1  30 FB           bmi  IDEWaitReady            ;Wait for BUSY (bit 7) to be zero
+00CC9A  1  6A              ror                          ;shift DRQ status bit into the Carry bit
+00CC9B  1  6A              ror
+00CC9C  1  6A              ror
+00CC9D  1  6A              ror
+00CC9E  1  60              rts
+00CC9F  1               
+00CC9F  1               ;------------------------------------------------------------------------------
+00CC9F  1               ; CheckDevice - Check to see if a device is attached to the interface.
+00CC9F  1               ; Input:
+00CC9F  1               ;       X = requested slot number in form $n0 where n = slot 1 to 7
+00CC9F  1               ; Output:
+00CC9F  1               ;       Carry flag: 0 = Device Present, 1 = Device Missing
+00CC9F  1               ;
+00CC9F  1               ; CPU Registers changed:  A, P
+00CC9F  1               ;
+00CC9F  1               ;  Checks to see if the drive status register is readable and equal to $50
+00CC9F  1               ;  If so, return with the Carry clear, otherwise return with the carry set.
+00CC9F  1               ;  Waits up to 10sec on a standard 1Mhz Apple II for drive to become ready
+00CC9F  1               ;
+00CC9F  1               CheckDevice:
+00CC9F  1  98              tya
+00CCA0  1  48              pha
+00CCA1  1  BD 82 C0        lda  ClearCSMask,x           ;reset MASK bit in PLD for normal CS0 signaling
+00CCA4  1  A9 E0           lda  #$E0                    ;$E0 = [1, LBA, 1, Drive, LBA 27-24]  where
+00CCA6  1                                               ; LBA=1, Drive=0
+00CCA6  1  9D 8E C0        sta  ATAHead,x               ;Make sure ATA master drive is accessed
+00CCA9  1               
+00CCA9  1  A0 00           ldy  #0
+00CCAB  1               chkLoop:
+00CCAB  1  BD 8F C0        lda  ATAStatus,x
+00CCAE  1  29 D0           and  #%11010000
+00CCB0  1  C9 50           cmp  #$50                    ;if BUSY= 0 and RDY=1 and DSC=1
+00CCB2  1  F0 0D           beq  DeviceFound
+00CCB4  1  A9 C5           lda  #WAIT_100ms
+00CCB6  1  20 C5 CC        jsr  Wait                    ;Wait 100ms for device to be ready
+00CCB9  1  C8              iny
+00CCBA  1  C0 64           cpy  #100                    ;Wait up to 10 seconds for drive to be ready
+00CCBC  1                                               ; This time may turn out to be much shorter on
+00CCBC  1                                               ; accelerated Apple IIs
+00CCBC  1  D0 ED           bne chkLoop
+00CCBE  1               
+00CCBE  1  38              sec                          ;set c = 1 if drive is not attached
+00CCBF  1  B0 01           bcs  DeviceExit
+00CCC1  1               
+00CCC1  1               DeviceFound:
+00CCC1  1  18              clc                          ;set c = 0 if drive is attached
+00CCC2  1               
+00CCC2  1               DeviceExit:
+00CCC2  1  68              pla
+00CCC3  1  A8              tay
+00CCC4  1  60              rts
+00CCC5  1               
+00CCC5  1               ;------------------------------------------------------------------------------
+00CCC5  1               ;  Wait - Copy of Apple's wait routine. Can't use ROM based routine in case
+00CCC5  1               ;         ROM is not active when we need it.
+00CCC5  1               ;
+00CCC5  1               ; Input:
+00CCC5  1               ;       A = desired delay time, where Delay(us) = .5(5A^2 + 27A + 26)
+00CCC5  1               ;       or more usefully: A = (Delay[in uS]/2.5 + 2.09)^.5 - 2.7
+00CCC5  1               ;
+00CCC5  1               ; CPU Registers changed:  A, P
+00CCC5  1               ;
+00CCC5  1               Wait:
+00CCC5  1  38              sec
+00CCC6  1               
+00CCC6  1               Wait2:
+00CCC6  1  48              pha
+00CCC7  1               
+00CCC7  1               Wait3:
+00CCC7  1  E9 01           sbc  #1
+00CCC9  1  D0 FC           bne  Wait3
+00CCCB  1  68              pla
+00CCCC  1  E9 01           sbc  #1
+00CCCE  1  D0 F6           bne  Wait2
+00CCD0  1  60              rts
+00CCD1  1               
+00CCD1  1               
+00CCD1  1               
+00CCD1  1               
+00CCD1  1               .IF DEBUG
+00CCD1  1               
+00CCD1  1               ;------------------------------------------------------------------------------
+00CCD1  1               ; DisplayParms - Display the parameters of the ProDOS request
+00CCD1  1               ; Input:
+00CCD1  1               ;       None
+00CCD1  1               ; Ouput:
+00CCD1  1               ;       None
+00CCD1  1               ;
+00CCD1  1               ; ZeroPage Usage:
+00CCD1  1               ;       None
+00CCD1  1               ;
+00CCD1  1               ; CPU Registers changed:  A, P
+00CCD1  1               ;
+00CCD1  1               DisplayParms:
+00CCD1  1                  jsr  DSString
+00CCD1  1                  .byte " B:",0
+00CCD1  1               
+00CCD1  1                  lda  pdBlockNumberH
+00CCD1  1                  jsr  DSByte
+00CCD1  1                  lda  pdBlockNumber
+00CCD1  1                  jsr  DSByte
+00CCD1  1               
+00CCD1  1                  jsr  DSString
+00CCD1  1                  .byte " U:",0
+00CCD1  1                  lda  pdUnitNumber
+00CCD1  1                  jsr  DSByte
+00CCD1  1               
+00CCD1  1                  jsr  DSString
+00CCD1  1                  .byte " A$",0
+00CCD1  1               
+00CCD1  1                  lda  pdIOBufferH
+00CCD1  1                  jsr  DSByte
+00CCD1  1               
+00CCD1  1                  lda  pdIOBuffer
+00CCD1  1                  jmp  DSByte
+00CCD1  1               
+00CCD1  1               
+00CCD1  1               ;------------------------------------------------------------------------------
+00CCD1  1               ; DSString - Sends a String to the Super Serial Card in Slot 2
+00CCD1  1               ; Input:
+00CCD1  1               ;       string must immediately follow the JSR to this function
+00CCD1  1               ;       and be terminated with zero byte.
+00CCD1  1               ; Ouput:
+00CCD1  1               ;       None
+00CCD1  1               ;
+00CCD1  1               ; ZeroPage Usage:
+00CCD1  1               ;       MsgPointerLow, MsgPointerHi
+00CCD1  1               ;
+00CCD1  1               ; CPU Registers changed:  A, P
+00CCD1  1               ;
+00CCD1  1               DSString:
+00CCD1  1                  pha                          ;save the Acc reg
+00CCD1  1                  txa
+00CCD1  1                  pha                          ;save the X reg
+00CCD1  1                  tya
+00CCD1  1                  pha                          ;save the Y reg
+00CCD1  1                  tsx                          ;put the stack pointer in X
+00CCD1  1                  lda  MsgPointerLow
+00CCD1  1                  pha                          ;push zero page location on stack
+00CCD1  1                  lda  MsgPointerHi
+00CCD1  1                  pha                          ;push zero page location on stack
+00CCD1  1               
+00CCD1  1                  lda  StackBase+4,x           ;determine the location of message to display
+00CCD1  1                  clc
+00CCD1  1                  adc  #$01                    ;add 1 because JSR pushes the last byte of its
+00CCD1  1                  sta  MsgPointerLow           ; destination address on the stack
+00CCD1  1               
+00CCD1  1                  lda  StackBase+5,x
+00CCD1  1                  adc  #0
+00CCD1  1                  sta  MsgPointerHi
+00CCD1  1               
+00CCD1  1               dss1:
+00CCD1  1                  ldy  #0
+00CCD1  1                  lda  (MsgPointerLow),y
+00CCD1  1                  beq  dssend
+00CCD1  1                  jsr  DSChar                  ;display message
+00CCD1  1                  inc  MsgPointerLow
+00CCD1  1                  bne  dss1
+00CCD1  1                  inc  MsgPointerHi
+00CCD1  1                  jmp  dss1
+00CCD1  1               
+00CCD1  1               dssend:
+00CCD1  1               
+00CCD1  1                  lda  MsgPointerHi
+00CCD1  1                  sta  StackBase+5,x
+00CCD1  1                  lda  MsgPointerLow
+00CCD1  1                  sta  StackBase+4,x           ;fix up the return address on the stack.
+00CCD1  1               
+00CCD1  1                  pla
+00CCD1  1                  sta  MsgPointerHi            ;restore zero page location
+00CCD1  1                  pla
+00CCD1  1                  sta  MsgPointerLow           ;restore zero page location
+00CCD1  1                  pla
+00CCD1  1                  tay
+00CCD1  1                  pla
+00CCD1  1                  tax
+00CCD1  1                  pla
+00CCD1  1                  rts                          ;return to location after string's null.
+00CCD1  1               
+00CCD1  1               ;------------------------------------------------------------------------------
+00CCD1  1               ; DSByteCRLF - Sends a Hex byte followed by a CR LF to the Super Serial
+00CCD1  1               ; Card in Slot 2
+00CCD1  1               ;
+00CCD1  1               ; Input:
+00CCD1  1               ;       A = Hex number to display
+00CCD1  1               ; Ouput:
+00CCD1  1               ;       None
+00CCD1  1               ;
+00CCD1  1               ; CPU Registers changed:  A, P
+00CCD1  1               ;
+00CCD1  1               DSByteCRLF:
+00CCD1  1                  jsr DSByte
+00CCD1  1               DSCRLF:
+00CCD1  1                  lda  #$0D
+00CCD1  1                  jsr  DSChar
+00CCD1  1                  lda  #$0A
+00CCD1  1                  jmp  DSChar
+00CCD1  1               
+00CCD1  1               ;------------------------------------------------------------------------------
+00CCD1  1               ; DSByte - Sends a Hex byte to the Super Serial Card in Slot 2
+00CCD1  1               ; Input:
+00CCD1  1               ;       A = Hex number to display
+00CCD1  1               ; Ouput:
+00CCD1  1               ;       None
+00CCD1  1               ;
+00CCD1  1               ; CPU Registers changed:  A, P
+00CCD1  1               ;
+00CCD1  1               DSByte:
+00CCD1  1                  pha
+00CCD1  1                  lsr a
+00CCD1  1                  lsr a
+00CCD1  1                  lsr a
+00CCD1  1                  lsr a
+00CCD1  1                  jsr DSNibble
+00CCD1  1                  pla
+00CCD1  1               DSNibble:
+00CCD1  1                  and #$0F
+00CCD1  1                  ora #$30
+00CCD1  1                  cmp #$30+10
+00CCD1  1                  bcc digit
+00CCD1  1                  adc #6
+00CCD1  1               digit:
+00CCD1  1                  jmp DSChar
+00CCD1  1               
+00CCD1  1               ;------------------------------------------------------------------------------
+00CCD1  1               ; DSChar - Sends a char to the Super Serial Card in Slot 2
+00CCD1  1               ; Input:
+00CCD1  1               ;       A = Character to Send
+00CCD1  1               ;       mslot = should contain current slot number of CFFA
+00CCD1  1               ; Ouput:
+00CCD1  1               ;       (data out serial port)
+00CCD1  1               ;
+00CCD1  1               ; ZeroPage Usage:
+00CCD1  1               ;       None
+00CCD1  1               ;
+00CCD1  1               ; CPU Registers changed:  P
+00CCD1  1               ;
+00CCD1  1               DSBlank:
+00CCD1  1                  lda #$20
+00CCD1  1               DSChar:
+00CCD1  1                  pha
+00CCD1  1                  tya
+00CCD1  1                  pha
+00CCD1  1                  lda  mslot
+00CCD1  1                  and  #$0f
+00CCD1  1                  tay                          ;Y reg now has $0n for accessing scratchpad RAM
+00CCD1  1                  lda  SerialInitDone,y
+00CCD1  1                  cmp  #$A5
+00CCD1  1                  beq  dsc0
+00CCD1  1               
+00CCD1  1               ; Init the serial port if sig byte is not $A5.
+00CCD1  1               ; Set up serial port on the Apple Super Serial card. Always assume slot 2.
+00CCD1  1                  lda  #$1f
+00CCD1  1                  sta  $c0ab                   ;control register
+00CCD1  1                  lda  #$0b
+00CCD1  1                  sta  $c0aa                   ;format
+00CCD1  1                  lda  $c0a9                   ;clear status
+00CCD1  1                  lda  #$A5
+00CCD1  1                  sta  SerialInitDone,y
+00CCD1  1               
+00CCD1  1               dsc0:
+00CCD1  1                  lda  $c0a9
+00CCD1  1                  and  #%00010000              ;Transmit register empty?
+00CCD1  1                  beq  dsc0                    ;If not, wait
+00CCD1  1               
+00CCD1  1                  pla
+00CCD1  1                  tay
+00CCD1  1                  pla                          ;get byte back
+00CCD1  1                  sta  $c0a8                   ;send it
+00CCD1  1                  rts
+00CCD1  1               
+00CCD1  1               .ENDIF
+00CCD1  1               

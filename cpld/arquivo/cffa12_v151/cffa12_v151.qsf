@@ -1,0 +1,46 @@
+# CFFA v1.2 (Rich Dreher) - logica CPLD v1.5.1 - Quartus II 13.0sp1 - 2026-11-20
+set_global_assignment -name FAMILY "MAX7000S"
+set_global_assignment -name DEVICE EPM7064SLC44-10
+set_global_assignment -name TOP_LEVEL_ENTITY cffa12_v151
+set_global_assignment -name VERILOG_FILE cffa12_v151.v
+set_global_assignment -name VERILOG_FILE cffa_core_v15.v
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
+# entradas (iguais a logica 1.4)
+set_location_assignment PIN_21 -to A0
+set_location_assignment PIN_20 -to A1
+set_location_assignment PIN_19 -to A2
+set_location_assignment PIN_18 -to A3
+set_location_assignment PIN_17 -to A8
+set_location_assignment PIN_16 -to A9
+set_location_assignment PIN_14 -to A10
+set_location_assignment PIN_12 -to RW
+set_location_assignment PIN_6  -to nDEVSEL
+set_location_assignment PIN_5  -to nIOSTRB
+set_location_assignment PIN_4  -to nIOSEL
+set_location_assignment PIN_43 -to CLK7M
+# saidas (iguais a logica 1.4)
+set_location_assignment PIN_9  -to LA0
+set_location_assignment PIN_11 -to LA1
+set_location_assignment PIN_28 -to LA2
+set_location_assignment PIN_25 -to nDBUS245
+set_location_assignment PIN_26 -to NOT_RW
+set_location_assignment PIN_29 -to nEPROM_EN
+set_location_assignment PIN_31 -to nR_HOST
+set_location_assignment PIN_33 -to R_ATA
+set_location_assignment PIN_34 -to W_HOST
+set_location_assignment PIN_36 -to nW_ATA
+set_location_assignment PIN_37 -to nIOWR
+set_location_assignment PIN_39 -to nIORD
+set_location_assignment PIN_40 -to nCS0
+set_location_assignment PIN_41 -to nCS1
+# novos na v1.5
+set_location_assignment PIN_8  -to nWE
+set_location_assignment PIN_27 -to BK14
+# saidas lentas, como na 1.4 (menos ruido no barramento)
+set_instance_assignment -name SLOW_SLEW_RATE ON -to *
+# v1.5.1: o Quartus nao pode escolher o estado inicial dos registradores (na v1.5 estava "Power-Up Don't Care" = On).
+# Garante no power-up: escrita travada (we_en=0) e A14 em 0 (banco do jumper A12/A13).
+set_global_assignment -name ALLOW_POWER_UP_DONT_CARE OFF
+
+set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND "AS INPUT TRI-STATED"

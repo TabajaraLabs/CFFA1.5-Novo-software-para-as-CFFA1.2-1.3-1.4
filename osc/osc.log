@@ -1,0 +1,68 @@
+[08:35:36.872] ponte_osc: conectando a 192.168.0.30:5025 ...
+[08:35:36.894] conectado: AGILENT TECHNOLOGIES,DSO-X 2002A,MY51331246,02.50.2019022736
+[08:35:36.895] monitorando C:\Users\Alexandre\Documents\Claude\Apple II\CFFA\osc\envio_osc
+[08:36:11.519] [ponte] processando arma_a14_v1.txt
+[08:36:11.528] enviado: *RST
+[08:36:13.529] enviado: :CHANnel1:DISPlay ON
+[08:36:13.529] enviado: :CHANnel2:DISPlay OFF
+[08:36:13.530] enviado: :CHANnel1:COUPling DC
+[08:36:13.530] enviado: :CHANnel1:PROBe 10
+[08:36:13.531] enviado: :CHANnel1:SCALe 1
+[08:36:13.531] enviado: :CHANnel1:OFFSet 2.5
+[08:36:13.531] enviado: :TIMebase:SCALe 100E-9
+[08:36:13.532] enviado: :TIMebase:POSition 0
+[08:36:13.532] enviado: :ACQuire:TYPE NORMal
+[08:36:13.533] enviado: :TRIGger:MODE EDGE
+[08:36:13.533] enviado: :TRIGger:EDGE:SOURce CHANnel1
+[08:36:13.534] enviado: :TRIGger:EDGE:SLOPe POSitive
+[08:36:13.534] enviado: :TRIGger:EDGE:LEVel 1.4
+[08:36:13.534] enviado: :TRIGger:SWEep NORMal
+[08:36:13.535] enviado: :SINGle
+[08:36:14.539] :CHANnel1:PROBe? -> 1.0000000E+01
+[08:36:14.542] :TRIGger:EDGE:LEVel? -> 1.40000E+00
+[08:36:14.547] :TER? -> +1
+[08:36:15.775] captura salva: capturas\a14_armado_v1.png
+[08:36:15.777] [ponte] fim de arma_a14_v1.txt
+[08:36:33.838] [ponte] processando arma_a14_v2.txt
+[08:36:33.850] enviado: :SYSTem:MENU MASK
+[08:36:33.850] enviado: :TIMebase:SCALe 100E-9
+[08:36:33.851] enviado: :CHANnel1:OFFSet 2.5
+[08:36:34.059] :TER? -> +1
+[08:36:34.060] enviado: :SINGle
+[08:36:36.064] :TER? -> +0
+[08:36:36.066] :OPERegister:CONDition? -> +40
+[08:36:36.068] :TIMebase:SCALe? -> 1.000E-07
+[08:36:37.284] captura salva: capturas\a14_armado_v2.png
+[08:36:37.285] [ponte] fim de arma_a14_v2.txt
+[08:37:12.202] [ponte] processando rearma_v1.txt
+[08:37:12.213] :TER? -> +1
+[08:37:12.215] :OPERegister:CONDition? -> +32
+[08:37:13.406] captura salva: capturas\a14_antes_rearme_v1.png
+[08:37:13.407] enviado: :SINGle
+[08:37:15.415] :TER? -> +0
+[08:37:15.417] :OPERegister:CONDition? -> +40
+[08:37:15.419] [ponte] fim de rearma_v1.txt
+[08:37:27.762] [ponte] processando le_v2.txt
+[08:37:27.773] :TER? -> +1
+[08:37:27.788] :OPERegister:CONDition? -> +32
+[08:37:29.012] captura salva: capturas\a14_depois_v2.png
+[08:37:29.018] :MEASure:VMAX? CHANnel1 -> 1.49E+00
+[08:37:29.024] :MEASure:VMIN? CHANnel1 -> -7.6E-01
+[08:37:29.025] [ponte] fim de le_v2.txt
+[08:41:40.981] [ponte] processando le_v3.txt
+[08:41:40.995] :TER? -> +1
+[08:41:41.003] :OPERegister:CONDition? -> +32
+[08:41:41.007] :TIMebase:SCALe? -> 1.000E-07
+[08:41:41.009] :CHANnel1:SCALe? -> 1.00E+00
+[08:41:41.012] :MEASure:VMAX? CHANnel1 -> 3.75E+00
+[08:41:41.016] :MEASure:VMIN? CHANnel1 -> -1.68E+00
+[08:41:42.221] captura salva: capturas\tela_piorou_v1.png
+[08:41:42.222] [ponte] fim de le_v3.txt
+[08:47:11.856] [ponte] processando le_v4.txt
+[08:47:11.858] [ponte] fim de le_v4.txt
+[08:47:29.316] [ponte] processando le_v5.txt
+[08:47:29.326] :TER? -> +1
+[08:47:29.335] :MEASure:VMAX? CHANnel1 -> 2.18E+00
+[08:47:29.346] :MEASure:VMIN? CHANnel1 -> 1.01E+00
+[08:47:30.576] captura salva: capturas\rc330_v2.png
+[08:47:30.578] [ponte] fim de le_v5.txt

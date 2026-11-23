@@ -1,0 +1,33 @@
+[Design Root]
+Version=1.0.0
+
+[Directory]
+PCBLIB1.LIB=PCBLib
+CFFA12B.PCB=PCB
+CAM for CFFA12B=Folder
+CAM Outputs for CFFA12B.cam=CAMManager
+Schematic v1.2B=Sch
+CFFA12_Cache=SchLib
+CFFA12_Library=SchLib
+
+[PCBLIB1.LIB]
+Editor Kind=PCBLib
+
+[CFFA12B.PCB]
+Editor Kind=PCB
+
+[CAM for CFFA12B]
+Editor Kind=Folder
+
+[CAM Outputs for CFFA12B.cam]
+Editor Kind=CAMManager
+
+[Schematic v1.2B]
+Editor Kind=Sch
+
+[CFFA12_Cache]
+Editor Kind=SchLib
+
+[CFFA12_Library]
+Editor Kind=SchLib
+

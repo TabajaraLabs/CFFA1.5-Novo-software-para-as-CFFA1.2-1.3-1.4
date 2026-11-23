@@ -1,0 +1,311 @@
+ca65 V2.18 - Ubuntu 2.19-1
+Main file   : idetest_v1.s
+Current file: idetest_v1.s
+
+000000r 1               ; idetest_v1.s - teste da CFFA v1.2 na RAM (Apple IIe Enhanced, 65C02), placa no slot 7
+000000r 1               ; 1) IDENTIFY do cartao: modelo, serial, firmware, capacidade
+000000r 1               ; 2) mede o laco de leitura original (status a cada word) x laco rapido (status 1x por setor)
+000000r 1               ;    lendo 256 setores a partir do LBA 0 (somente leitura). As linhas ">INICIO"/">FIM" recebem
+000000r 1               ;    a hora do PC na ponte (ms) -> tempo de cada laco.
+000000r 1               ; Montar: ca65 --cpu 65C02 idetest_v1.s && ld65 -t none -S $6000 idetest_v1.o -o idetest_v1.bin
+000000r 1                       .setcpu "65C02"
+000000r 1                       .org $6000
+006000  1               
+006000  1               SLOT    = 7
+006000  1               IOB     = $C080 + SLOT*16
+006000  1               DATAH   = IOB+0
+006000  1               DATAL   = IOB+8
+006000  1               ERRREG  = IOB+9
+006000  1               SECCNT  = IOB+10
+006000  1               SECT    = IOB+11
+006000  1               CYL     = IOB+12
+006000  1               CYLH    = IOB+13
+006000  1               HEAD    = IOB+14
+006000  1               CMD     = IOB+15
+006000  1               STATUS  = IOB+15
+006000  1               
+006000  1               COUT    = $FDED
+006000  1               CROUT   = $FD8E
+006000  1               PRBYTE  = $FDDA
+006000  1               
+006000  1               PTR     = $06           ; ponteiro do buffer (2 bytes)
+006000  1               CNT     = $08
+006000  1               TMP     = $09
+006000  1               LBA0    = $EB
+006000  1               LBA1    = $EC
+006000  1               SUMLO   = $ED
+006000  1               SUMHI   = $EE
+006000  1               NSEC    = $EF
+006000  1               
+006000  1               BUF     = $6800
+006000  1               
+006000  1  20 61 62     start:  jsr msg
+006003  1  43 46 46 41          .byte "CFFA TESTE V1 - SLOT 7",0
+006007  1  20 54 45 53  
+00600B  1  54 45 20 56  
+00601A  1  20 8E FD             jsr CROUT
+00601D  1  20 D5 60             jsr identify
+006020  1  B0 75                bcs fail
+006022  1                       ; ---- laco original ----
+006022  1  20 61 62             jsr msg
+006025  1  3E 49 4E 49          .byte ">INICIO ORIGINAL",0
+006029  1  43 49 4F 20  
+00602D  1  4F 52 49 47  
+006036  1  20 8E FD             jsr CROUT
+006039  1  A9 00                lda #0
+00603B  1  20 A7 61             jsr bench
+00603E  1  B0 57                bcs fail
+006040  1  20 61 62             jsr msg
+006043  1  3E 46 49 4D          .byte ">FIM ORIGINAL SOMA=",0
+006047  1  20 4F 52 49  
+00604B  1  47 49 4E 41  
+006057  1  20 54 62             jsr prsum
+00605A  1                       ; ---- laco rapido ----
+00605A  1  20 61 62             jsr msg
+00605D  1  3E 49 4E 49          .byte ">INICIO RAPIDO",0
+006061  1  43 49 4F 20  
+006065  1  52 41 50 49  
+00606C  1  20 8E FD             jsr CROUT
+00606F  1  A9 01                lda #1
+006071  1  20 A7 61             jsr bench
+006074  1  B0 21                bcs fail
+006076  1  20 61 62             jsr msg
+006079  1  3E 46 49 4D          .byte ">FIM RAPIDO SOMA=",0
+00607D  1  20 52 41 50  
+006081  1  49 44 4F 20  
+00608B  1  20 54 62             jsr prsum
+00608E  1  20 61 62             jsr msg
+006091  1  4F 4B 00             .byte "OK",0
+006094  1  4C 8E FD             jmp CROUT
+006097  1  20 61 62     fail:   jsr msg
+00609A  1  45 52 52 4F          .byte "ERRO ST=",0
+00609E  1  20 53 54 3D  
+0060A2  1  00           
+0060A3  1  AD FF C0             lda STATUS
+0060A6  1  20 DA FD             jsr PRBYTE
+0060A9  1  20 61 62             jsr msg
+0060AC  1  20 45 52 3D          .byte " ER=",0
+0060B0  1  00           
+0060B1  1  AD F9 C0             lda ERRREG
+0060B4  1  20 DA FD             jsr PRBYTE
+0060B7  1  4C 8E FD             jmp CROUT
+0060BA  1               
+0060BA  1               ; ---------------- espera BSY=0 (com tempo maximo ~2 s) ----------------
+0060BA  1               waitrdy:
+0060BA  1  A2 00                ldx #0
+0060BC  1  A0 00                ldy #0
+0060BE  1  A9 08                lda #8
+0060C0  1  85 09                sta TMP
+0060C2  1  AD FF C0     @w:     lda STATUS
+0060C5  1  10 0C                bpl @ok
+0060C7  1  88                   dey
+0060C8  1  D0 F8                bne @w
+0060CA  1  CA                   dex
+0060CB  1  D0 F5                bne @w
+0060CD  1  C6 09                dec TMP
+0060CF  1  D0 F1                bne @w
+0060D1  1  38                   sec
+0060D2  1  60                   rts
+0060D3  1  18           @ok:    clc
+0060D4  1  60                   rts
+0060D5  1               
+0060D5  1               ; ---------------- IDENTIFY ----------------
+0060D5  1               identify:
+0060D5  1  20 BA 60             jsr waitrdy
+0060D8  1  B0 18                bcs @err
+0060DA  1  A9 E0                lda #$E0
+0060DC  1  8D FE C0             sta HEAD
+0060DF  1  A9 EC                lda #$EC
+0060E1  1  8D FF C0             sta CMD
+0060E4  1  20 BA 60             jsr waitrdy
+0060E7  1  B0 09                bcs @err
+0060E9  1  AD FF C0             lda STATUS
+0060EC  1  29 09                and #$09
+0060EE  1  C9 08                cmp #$08
+0060F0  1  F0 02                beq @go
+0060F2  1  38           @err:   sec
+0060F3  1  60                   rts
+0060F4  1               @go:
+0060F4  1  A0 00                ldy #0
+0060F6  1  AD F8 C0     @l:     lda DATAL
+0060F9  1  99 00 68             sta BUF,y
+0060FC  1  AD F0 C0             lda DATAH
+0060FF  1  99 01 68             sta BUF+1,y
+006102  1  C8                   iny
+006103  1  C8                   iny
+006104  1  D0 F0                bne @l
+006106  1  AD F8 C0     @l2:    lda DATAL
+006109  1  99 00 69             sta BUF+256,y
+00610C  1  AD F0 C0             lda DATAH
+00610F  1  99 01 69             sta BUF+257,y
+006112  1  C8                   iny
+006113  1  C8                   iny
+006114  1  D0 F0                bne @l2
+006116  1  20 61 62             jsr msg
+006119  1  4D 4F 44 45          .byte "MODELO: ",0
+00611D  1  4C 4F 3A 20  
+006121  1  00           
+006122  1  A2 36                ldx #54
+006124  1  A0 14                ldy #20
+006126  1  20 86 61             jsr prstr
+006129  1  20 61 62             jsr msg
+00612C  1  53 45 52 49          .byte "SERIAL: ",0
+006130  1  41 4C 3A 20  
+006134  1  00           
+006135  1  A2 14                ldx #20
+006137  1  A0 0A                ldy #10
+006139  1  20 86 61             jsr prstr
+00613C  1  20 61 62             jsr msg
+00613F  1  46 49 52 4D          .byte "FIRMWARE: ",0
+006143  1  57 41 52 45  
+006147  1  3A 20 00     
+00614A  1  A2 2E                ldx #46
+00614C  1  A0 04                ldy #4
+00614E  1  20 86 61             jsr prstr
+006151  1  20 61 62             jsr msg
+006154  1  53 45 54 4F          .byte "SETORES (LBA, HEX): ",0
+006158  1  52 45 53 20  
+00615C  1  28 4C 42 41  
+006169  1  AD 7B 68             lda BUF+123
+00616C  1  20 DA FD             jsr PRBYTE
+00616F  1  AD 7A 68             lda BUF+122
+006172  1  20 DA FD             jsr PRBYTE
+006175  1  AD 79 68             lda BUF+121
+006178  1  20 DA FD             jsr PRBYTE
+00617B  1  AD 78 68             lda BUF+120
+00617E  1  20 DA FD             jsr PRBYTE
+006181  1  20 8E FD             jsr CROUT
+006184  1  18                   clc
+006185  1  60                   rts
+006186  1               
+006186  1               ; imprime Y words a partir do byte X do buffer (cada word: byte alto primeiro)
+006186  1  BD 01 68     prstr:  lda BUF+1,x
+006189  1  20 9A 61             jsr pch
+00618C  1  BD 00 68             lda BUF,x
+00618F  1  20 9A 61             jsr pch
+006192  1  E8                   inx
+006193  1  E8                   inx
+006194  1  88                   dey
+006195  1  D0 EF                bne prstr
+006197  1  4C 8E FD             jmp CROUT
+00619A  1  29 7F        pch:    and #$7F
+00619C  1  C9 20                cmp #$20
+00619E  1  B0 02                bcs @p
+0061A0  1  A9 2E                lda #'.'
+0061A2  1  09 80        @p:     ora #$80
+0061A4  1  4C ED FD             jmp COUT
+0061A7  1               
+0061A7  1               ; ---------------- benchmark: A=0 original, A=1 rapido ----------------
+0061A7  1  8D 7F 62     bench:  sta MODE
+0061AA  1  64 EB                stz LBA0
+0061AC  1  64 EC                stz LBA1
+0061AE  1  64 ED                stz SUMLO
+0061B0  1  64 EE                stz SUMHI
+0061B2  1  64 EF                stz NSEC                ; 256 setores
+0061B4  1  20 BA 60     @sec:   jsr waitrdy
+0061B7  1  90 01                bcc @s1
+0061B9  1  60                   rts
+0061BA  1               @s1:
+0061BA  1  A9 E0                lda #$E0
+0061BC  1  8D FE C0             sta HEAD
+0061BF  1  A9 01                lda #1
+0061C1  1  8D FA C0             sta SECCNT
+0061C4  1  A5 EB                lda LBA0
+0061C6  1  8D FB C0             sta SECT
+0061C9  1  A5 EC                lda LBA1
+0061CB  1  8D FC C0             sta CYL
+0061CE  1  9C FD C0             stz CYLH
+0061D1  1  9C F0 C0             stz DATAH
+0061D4  1  A9 20                lda #$20
+0061D6  1  8D FF C0             sta CMD
+0061D9  1  20 BA 60             jsr waitrdy
+0061DC  1  B0 73                bcs @r
+0061DE  1  AD FF C0             lda STATUS
+0061E1  1  29 09                and #$09
+0061E3  1  C9 01                cmp #$01
+0061E5  1  F0 6B                beq @e
+0061E7  1  A9 00                lda #<BUF
+0061E9  1  85 06                sta PTR
+0061EB  1  A9 68                lda #>BUF
+0061ED  1  85 07                sta PTR+1
+0061EF  1  A9 02                lda #2
+0061F1  1  85 08                sta CNT
+0061F3  1  A0 00                ldy #0
+0061F5  1  AD 7F 62             lda MODE
+0061F8  1  D0 1F                bne @fast
+0061FA  1               ; --- laco original do firmware 1.2: status a cada word ---
+0061FA  1  AD FF C0     @lo:    lda STATUS
+0061FD  1  30 FB                bmi @lo
+0061FF  1  29 08                and #$08
+006201  1  F0 4F                beq @e
+006203  1  AD F8 C0             lda DATAL
+006206  1  91 06                sta (PTR),y
+006208  1  C8                   iny
+006209  1  AD F0 C0             lda DATAH
+00620C  1  91 06                sta (PTR),y
+00620E  1  C8                   iny
+00620F  1  D0 E9                bne @lo
+006211  1  E6 07                inc PTR+1
+006213  1  C6 08                dec CNT
+006215  1  D0 E3                bne @lo
+006217  1  80 1B                bra @next
+006219  1               ; --- laco rapido: status ja conferido 1x (DRQ) ---
+006219  1  AD FF C0     @fast:  lda STATUS
+00621C  1  29 08                and #$08
+00621E  1  F0 32                beq @e
+006220  1  AD F8 C0     @lf:    lda DATAL
+006223  1  91 06                sta (PTR),y
+006225  1  C8                   iny
+006226  1  AD F0 C0             lda DATAH
+006229  1  91 06                sta (PTR),y
+00622B  1  C8                   iny
+00622C  1  D0 F2                bne @lf
+00622E  1  E6 07                inc PTR+1
+006230  1  C6 08                dec CNT
+006232  1  D0 EC                bne @lf
+006234  1  18           @next:  clc                     ; soma simples dos 2 primeiros bytes de cada setor
+006235  1  AD 00 68             lda BUF
+006238  1  65 ED                adc SUMLO
+00623A  1  85 ED                sta SUMLO
+00623C  1  AD 01 68             lda BUF+1
+00623F  1  65 EE                adc SUMHI
+006241  1  85 EE                sta SUMHI
+006243  1  E6 EB                inc LBA0
+006245  1  D0 02                bne @n2
+006247  1  E6 EC                inc LBA1
+006249  1  C6 EF        @n2:    dec NSEC
+00624B  1  F0 03                beq @fim
+00624D  1  4C B4 61             jmp @sec
+006250  1               @fim:
+006250  1  18                   clc
+006251  1  60           @r:     rts
+006252  1  38           @e:     sec
+006253  1  60                   rts
+006254  1               
+006254  1  A5 EE        prsum:  lda SUMHI
+006256  1  20 DA FD             jsr PRBYTE
+006259  1  A5 ED                lda SUMLO
+00625B  1  20 DA FD             jsr PRBYTE
+00625E  1  4C 8E FD             jmp CROUT
+006261  1               
+006261  1               ; imprime string inline (terminada em 0) logo apos o JSR
+006261  1  68           msg:    pla
+006262  1  85 06                sta PTR
+006264  1  68                   pla
+006265  1  85 07                sta PTR+1
+006267  1  E6 06        @m:     inc PTR
+006269  1  D0 02                bne @m2
+00626B  1  E6 07                inc PTR+1
+00626D  1  B2 06        @m2:    lda (PTR)
+00626F  1  F0 07                beq @d
+006271  1  09 80                ora #$80
+006273  1  20 ED FD             jsr COUT
+006276  1  80 EF                bra @m
+006278  1  A5 07        @d:     lda PTR+1
+00627A  1  48                   pha
+00627B  1  A5 06                lda PTR
+00627D  1  48                   pha
+00627E  1  60                   rts
+00627F  1               
+00627F  1  00           MODE:   .byte 0
+00627F  1               

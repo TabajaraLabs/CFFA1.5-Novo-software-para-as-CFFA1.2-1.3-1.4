@@ -1,0 +1,413 @@
+ca65 V2.18 - Ubuntu 2.19-1
+Main file   : serimg_v1.s
+Current file: serimg_v1.s
+
+000000r 1               ; serimg_v1.s - transfere imagens de disco entre o PC e um drive da CFFA pela Super Serial (slot 1)
+000000r 1               ; Tabajara Labs, 2026-11-20. Roda em $6000 (a partir do monitor). Usa o driver da propria CFFA ($C70A),
+000000r 1               ; entao vale para imagem montada em cartao FAT (firmware 1.4/1.5) e para particao de cartao cru.
+000000r 1               ;   $6003 OP     0 = PC -> Apple (grava no drive)   1 = Apple -> PC (le do drive, backup)
+000000r 1               ;   $6004 UNIT   $70 = drive 1, $F0 = drive 2 (drives 3/4: unidade do slot espelhado, ex. $40/$C0)
+000000r 1               ;   $6005 NBLK   numero de blocos de 512 bytes (2 bytes); 0 = o tamanho do drive (STATUS do driver)
+000000r 1               ;   $6007 BLK0   primeiro bloco (2 bytes)
+000000r 1               ;   $6009 RAPIDO 1 = troca para 115200 durante a transferencia (pede a ponte com ESC 01 'B' '4')
+000000r 1               ;   $600A CONF   1 = depois de gravar, rele tudo e confere a soma
+000000r 1               ; Protocolo: gravacao: o Apple manda ACK ($06) antes de cada bloco de 512 (#sendbin ARQ 512 na ponte).
+000000r 1               ;            backup: o Apple espera um byte qualquer da ponte (#recvbin), manda 2 bytes com o numero de blocos
+000000r 1               ;            e depois os blocos em sequencia.
+000000r 1               ; No fim imprime: BLOCOS nnnn SOMA ssss [CONFERE xxxx] e OK ou o erro.
+000000r 1               ; Montar: ca65 --cpu 65C02 serimg_v1.s && ld65 -t none -S $6000 serimg_v1.o -o serimg_v1.bin
+000000r 1                       .setcpu "65C02"
+000000r 1                       .org $6000
+006000  1               SDATA   = $C098
+006000  1               SSTAT   = $C099
+006000  1               SCTL    = $C09B
+006000  1               P8      = $C70A
+006000  1               COUT    = $FDED
+006000  1               CROUT   = $FD8E
+006000  1               PRBYTE  = $FDDA
+006000  1               KBD     = $C000
+006000  1               KBDSTRB = $C010
+006000  1               WAIT    = $FCA8
+006000  1               BUF     = $7000
+006000  1               P       = $FA                   ; ponteiro do msg
+006000  1               
+006000  1  4C 18 60             jmp start
+006003  1  00           OP:     .byte 0
+006004  1  70           UNIT:   .byte $70
+006005  1  18 01        NBLK:   .word 280
+006007  1  00 00        BLK0:   .word 0
+006009  1  01           RAPIDO: .byte 1
+00600A  1  01           CONF:   .byte 1
+00600B  1  00 00        SUM:    .word 0
+00600D  1  00 00        VSUM:   .word 0
+00600F  1  00 00        CUR:    .word 0
+006011  1  00 00        CNT:    .word 0
+006013  1  00           SAVCTL: .byte 0
+006014  1  00           ERR:    .byte 0                 ; 0 = ok, 1 = tempo esgotado/ESC, 2 = erro do driver (codigo em DERR)
+006015  1  00           DERR:   .byte 0
+006016  1  00           TMO:    .byte 0
+006017  1  00           TMO2:   .byte 0
+006018  1               
+006018  1  78           start:  sei
+006019  1  9C 0B 60             stz SUM
+00601C  1  9C 0C 60             stz SUM+1
+00601F  1  9C 0D 60             stz VSUM
+006022  1  9C 0E 60             stz VSUM+1
+006025  1  9C 14 60             stz ERR
+006028  1  AD 99 C0             lda SSTAT               ; limpa a recepcao
+00602B  1  AD 98 C0             lda SDATA
+00602E  1  AD 9B C0             lda SCTL
+006031  1  8D 13 60             sta SAVCTL
+006034  1  AD 09 60             lda RAPIDO
+006037  1  F0 18                beq @go
+006039  1  A2 34                ldx #'4'                ; pede 115200 para a ponte (ainda na velocidade antiga)
+00603B  1  20 3E 63             jsr baudreq
+00603E  1  20 51 63             jsr pausa
+006041  1  A9 10                lda #$10                ; 6551: relogio externo /16 = 1,8432 MHz / 16 = 115200, 8N1
+006043  1  8D 9B C0             sta SCTL
+006046  1  20 51 63             jsr pausa
+006049  1  20 51 63             jsr pausa
+00604C  1  A2 4B                ldx #'K'                ; confirma na velocidade nova
+00604E  1  20 3E 63             jsr baudreq
+006051  1  AD 05 60     @go:    lda NBLK                ; 0 blocos = o tamanho do drive (STATUS)
+006054  1  0D 06 60             ora NBLK+1
+006057  1  D0 18                bne @g2
+006059  1  A9 00                lda #0
+00605B  1  20 65 62             jsr drv
+00605E  1  90 0B                bcc @st
+006060  1  8D 15 60             sta DERR
+006063  1  A9 02                lda #2
+006065  1  8D 14 60             sta ERR
+006068  1  4C 3A 61             jmp fim
+00606B  1  8E 05 60     @st:    stx NBLK
+00606E  1  8C 06 60             sty NBLK+1
+006071  1  AD 07 60     @g2:    lda BLK0
+006074  1  8D 0F 60             sta CUR
+006077  1  AD 08 60             lda BLK0+1
+00607A  1  8D 10 60             sta CUR+1
+00607D  1  AD 05 60             lda NBLK
+006080  1  8D 11 60             sta CNT
+006083  1  AD 06 60             lda NBLK+1
+006086  1  8D 12 60             sta CNT+1
+006089  1  AD 03 60             lda OP
+00608C  1  F0 03                beq recv
+00608E  1  4C FC 60             jmp send
+006091  1               
+006091  1               ; ---------------- PC -> Apple: recebe e grava ----------------
+006091  1  AD 11 60     recv:   lda CNT
+006094  1  0D 12 60             ora CNT+1
+006097  1  F0 2C                beq @conf
+006099  1  A9 06                lda #$06                ; ACK: pode mandar o proximo bloco
+00609B  1  20 10 63             jsr tx
+00609E  1  20 95 62             jsr rxblk
+0060A1  1  B0 0F                bcs @to
+0060A3  1  20 56 63             jsr sumblk
+0060A6  1  A9 02                lda #2                  ; WRITE
+0060A8  1  20 65 62             jsr drv
+0060AB  1  B0 0D                bcs @de
+0060AD  1  20 81 62             jsr nextb
+0060B0  1  80 DF                bra recv
+0060B2  1  A9 01        @to:    lda #1
+0060B4  1  8D 14 60             sta ERR
+0060B7  1  4C 3A 61             jmp fim
+0060BA  1  8D 15 60     @de:    sta DERR
+0060BD  1  A9 02                lda #2
+0060BF  1  8D 14 60             sta ERR
+0060C2  1  4C 3A 61             jmp fim
+0060C5  1  AD 0A 60     @conf:  lda CONF                ; rele e confere
+0060C8  1  F0 2F                beq @f
+0060CA  1  AD 07 60             lda BLK0
+0060CD  1  8D 0F 60             sta CUR
+0060D0  1  AD 08 60             lda BLK0+1
+0060D3  1  8D 10 60             sta CUR+1
+0060D6  1  AD 05 60             lda NBLK
+0060D9  1  8D 11 60             sta CNT
+0060DC  1  AD 06 60             lda NBLK+1
+0060DF  1  8D 12 60             sta CNT+1
+0060E2  1  AD 11 60     @v:     lda CNT
+0060E5  1  0D 12 60             ora CNT+1
+0060E8  1  F0 0F                beq @f
+0060EA  1  A9 01                lda #1
+0060EC  1  20 65 62             jsr drv
+0060EF  1  B0 C9                bcs @de
+0060F1  1  20 5A 63             jsr vsumblk
+0060F4  1  20 81 62             jsr nextb
+0060F7  1  80 E9                bra @v
+0060F9  1  4C 3A 61     @f:     jmp fim
+0060FC  1               
+0060FC  1               ; ---------------- Apple -> PC: le e envia ----------------
+0060FC  1  20 DF 62     send:   jsr rxlong              ; espera o "pode mandar" da ponte
+0060FF  1  90 08                bcc @h
+006101  1  A9 01                lda #1
+006103  1  8D 14 60             sta ERR
+006106  1  4C 3A 61             jmp fim
+006109  1  AD 05 60     @h:     lda NBLK                ; cabecalho: numero de blocos (2 bytes)
+00610C  1  20 10 63             jsr tx
+00610F  1  AD 06 60             lda NBLK+1
+006112  1  20 10 63             jsr tx
+006115  1  AD 11 60     @s:     lda CNT
+006118  1  0D 12 60             ora CNT+1
+00611B  1  F0 1A                beq @f
+00611D  1  A9 01                lda #1                  ; READ
+00611F  1  20 65 62             jsr drv
+006122  1  B0 0B                bcs @de
+006124  1  20 56 63             jsr sumblk
+006127  1  20 29 63             jsr txblk
+00612A  1  20 81 62             jsr nextb
+00612D  1  80 E6                bra @s
+00612F  1  8D 15 60     @de:    sta DERR
+006132  1  A9 02                lda #2
+006134  1  8D 14 60             sta ERR
+006137  1  4C 3A 61     @f:     jmp fim
+00613A  1               
+00613A  1               ; ---------------- fim: volta a velocidade e imprime o resumo ----------------
+00613A  1  AD 09 60     fim:    lda RAPIDO
+00613D  1  F0 22                beq @p
+00613F  1  20 1D 63             jsr txfim
+006142  1  A2 31                ldx #'1'                ; ponte volta para 19200
+006144  1  20 3E 63             jsr baudreq
+006147  1  20 1D 63             jsr txfim
+00614A  1  20 51 63             jsr pausa
+00614D  1  AD 13 60             lda SAVCTL
+006150  1  8D 9B C0             sta SCTL
+006153  1  20 51 63             jsr pausa
+006156  1  20 51 63             jsr pausa
+006159  1  A2 4B                ldx #'K'
+00615B  1  20 3E 63             jsr baudreq
+00615E  1  20 51 63             jsr pausa
+006161  1  58           @p:     cli
+006162  1  20 7B 63             jsr msg
+006165  1  42 4C 4F 43          .byte "BLOCOS ",0
+006169  1  4F 53 20 00  
+00616D  1  AD 06 60             lda NBLK+1
+006170  1  20 DA FD             jsr PRBYTE
+006173  1  AD 05 60             lda NBLK
+006176  1  20 DA FD             jsr PRBYTE
+006179  1  20 7B 63             jsr msg
+00617C  1  20 53 4F 4D          .byte " SOMA ",0
+006180  1  41 20 00     
+006183  1  AD 0C 60             lda SUM+1
+006186  1  20 DA FD             jsr PRBYTE
+006189  1  AD 0B 60             lda SUM
+00618C  1  20 DA FD             jsr PRBYTE
+00618F  1  AD 03 60             lda OP
+006192  1  D0 1E                bne @r
+006194  1  AD 0A 60             lda CONF
+006197  1  F0 19                beq @r
+006199  1  20 7B 63             jsr msg
+00619C  1  20 43 4F 4E          .byte " CONFERE ",0
+0061A0  1  46 45 52 45  
+0061A4  1  20 00        
+0061A6  1  AD 0E 60             lda VSUM+1
+0061A9  1  20 DA FD             jsr PRBYTE
+0061AC  1  AD 0D 60             lda VSUM
+0061AF  1  20 DA FD             jsr PRBYTE
+0061B2  1  AD 14 60     @r:     lda ERR
+0061B5  1  D0 43                bne @e
+0061B7  1  AD 03 60             lda OP
+0061BA  1  D0 15                bne @ok
+0061BC  1  AD 0A 60             lda CONF
+0061BF  1  F0 10                beq @ok
+0061C1  1  AD 0D 60             lda VSUM
+0061C4  1  CD 0B 60             cmp SUM
+0061C7  1  D0 12                bne @vd
+0061C9  1  AD 0E 60             lda VSUM+1
+0061CC  1  CD 0C 60             cmp SUM+1
+0061CF  1  D0 0A                bne @vd
+0061D1  1  20 7B 63     @ok:    jsr msg
+0061D4  1  20 4F 4B 00          .byte " OK",0
+0061D8  1  4C 8E FD             jmp CROUT
+0061DB  1  20 7B 63     @vd:    jsr msg
+0061DE  1  20 44 49 46          .byte " DIFERENTE NA RELEITURA!",0
+0061E2  1  45 52 45 4E  
+0061E6  1  54 45 20 4E  
+0061F7  1  4C 8E FD             jmp CROUT
+0061FA  1  C9 01        @e:     cmp #1
+0061FC  1  D0 2F                bne @d
+0061FE  1  20 7B 63             jsr msg
+006201  1  20 50 41 52          .byte " PARADO (TEMPO ESGOTADO OU ESC) NO BLOCO ",0
+006205  1  41 44 4F 20  
+006209  1  28 54 45 4D  
+00622B  1  80 29                bra @blk
+00622D  1  20 7B 63     @d:     jsr msg
+006230  1  20 45 52 52          .byte " ERRO DO DRIVER $",0
+006234  1  4F 20 44 4F  
+006238  1  20 44 52 49  
+006242  1  AD 15 60             lda DERR
+006245  1  20 DA FD             jsr PRBYTE
+006248  1  20 7B 63             jsr msg
+00624B  1  20 4E 4F 20          .byte " NO BLOCO ",0
+00624F  1  42 4C 4F 43  
+006253  1  4F 20 00     
+006256  1  AD 10 60     @blk:   lda CUR+1
+006259  1  20 DA FD             jsr PRBYTE
+00625C  1  AD 0F 60             lda CUR
+00625F  1  20 DA FD             jsr PRBYTE
+006262  1  4C 8E FD             jmp CROUT
+006265  1               
+006265  1               ; ---------------- rotinas ----------------
+006265  1               ; drv: chama o driver da CFFA: A = comando (1 le, 2 grava) no bloco CUR, buffer BUF
+006265  1  85 42        drv:    sta $42
+006267  1  AD 04 60             lda UNIT
+00626A  1  85 43                sta $43
+00626C  1  A9 00                lda #<BUF
+00626E  1  85 44                sta $44
+006270  1  A9 70                lda #>BUF
+006272  1  85 45                sta $45
+006274  1  AD 0F 60             lda CUR
+006277  1  85 46                sta $46
+006279  1  AD 10 60             lda CUR+1
+00627C  1  85 47                sta $47
+00627E  1  4C 0A C7             jmp P8
+006281  1               
+006281  1  EE 0F 60     nextb:  inc CUR
+006284  1  D0 03                bne @1
+006286  1  EE 10 60             inc CUR+1
+006289  1  AD 11 60     @1:     lda CNT
+00628C  1  D0 03                bne @2
+00628E  1  CE 12 60             dec CNT+1
+006291  1  CE 11 60     @2:     dec CNT
+006294  1  60                   rts
+006295  1               
+006295  1               ; rxblk: recebe 512 bytes em BUF. C=1 se o tempo acabar (~0,8 s sem dados) ou ESC.
+006295  1               ; O primeiro byte pode demorar ate ~10 s. A 115200 sobram ~89 ciclos por byte: o laco usa ~25.
+006295  1  20 DF 62     rxblk:  jsr rxlong
+006298  1  B0 44                bcs @x
+00629A  1  8D 00 70             sta BUF
+00629D  1  A0 01                ldy #1
+00629F  1  A2 00        @a:     ldx #0
+0062A1  1  9C 16 60             stz TMO
+0062A4  1  AD 99 C0     @w1:    lda SSTAT
+0062A7  1  29 08                and #$08
+0062A9  1  D0 0A                bne @g1
+0062AB  1  CA                   dex
+0062AC  1  D0 F6                bne @w1
+0062AE  1  CE 16 60             dec TMO
+0062B1  1  D0 F1                bne @w1
+0062B3  1  38                   sec
+0062B4  1  60                   rts
+0062B5  1  AD 98 C0     @g1:    lda SDATA
+0062B8  1  99 00 70             sta BUF,y
+0062BB  1  C8                   iny
+0062BC  1  D0 E1                bne @a
+0062BE  1  A2 00        @b:     ldx #0
+0062C0  1  9C 16 60             stz TMO
+0062C3  1  AD 99 C0     @w2:    lda SSTAT
+0062C6  1  29 08                and #$08
+0062C8  1  D0 0A                bne @g2
+0062CA  1  CA                   dex
+0062CB  1  D0 F6                bne @w2
+0062CD  1  CE 16 60             dec TMO
+0062D0  1  D0 F1                bne @w2
+0062D2  1  38                   sec
+0062D3  1  60                   rts
+0062D4  1  AD 98 C0     @g2:    lda SDATA
+0062D7  1  99 00 71             sta BUF+256,y
+0062DA  1  C8                   iny
+0062DB  1  D0 E1                bne @b
+0062DD  1  18                   clc
+0062DE  1  60           @x:     rts
+0062DF  1               
+0062DF  1               ; rxlong: espera um byte por ate ~10 s (ESC no teclado cancela). C=1 se nao veio.
+0062DF  1  A9 28        rxlong: lda #40
+0062E1  1  8D 17 60             sta TMO2
+0062E4  1  A2 00        @o:     ldx #0
+0062E6  1  9C 16 60             stz TMO
+0062E9  1  AD 99 C0     @w:     lda SSTAT
+0062EC  1  29 08                and #$08
+0062EE  1  D0 1B                bne @g
+0062F0  1  CA                   dex
+0062F1  1  D0 F6                bne @w
+0062F3  1  AD 00 C0             lda KBD
+0062F6  1  C9 9B                cmp #$9B
+0062F8  1  F0 0C                beq @esc
+0062FA  1  CE 16 60             dec TMO
+0062FD  1  D0 EA                bne @w
+0062FF  1  CE 17 60             dec TMO2
+006302  1  D0 E0                bne @o
+006304  1  38                   sec
+006305  1  60                   rts
+006306  1  8D 10 C0     @esc:   sta KBDSTRB
+006309  1  38                   sec
+00630A  1  60                   rts
+00630B  1  AD 98 C0     @g:     lda SDATA
+00630E  1  18                   clc
+00630F  1  60                   rts
+006310  1               
+006310  1  48           tx:     pha
+006311  1  AD 99 C0     @w:     lda SSTAT
+006314  1  29 10                and #$10
+006316  1  F0 F9                beq @w
+006318  1  68                   pla
+006319  1  8D 98 C0             sta SDATA
+00631C  1  60                   rts
+00631D  1               
+00631D  1               ; txfim: espera o ultimo byte sair
+00631D  1  AD 99 C0     txfim:  lda SSTAT
+006320  1  29 10                and #$10
+006322  1  F0 F9                beq txfim
+006324  1  A9 0A                lda #10
+006326  1  4C A8 FC             jmp WAIT
+006329  1               
+006329  1  A0 00        txblk:  ldy #0
+00632B  1  B9 00 70     @a:     lda BUF,y
+00632E  1  20 10 63             jsr tx
+006331  1  C8                   iny
+006332  1  D0 F7                bne @a
+006334  1  B9 00 71     @b:     lda BUF+256,y
+006337  1  20 10 63             jsr tx
+00633A  1  C8                   iny
+00633B  1  D0 F7                bne @b
+00633D  1  60                   rts
+00633E  1               
+00633E  1               ; baudreq: manda ESC 01 'B' X para a ponte
+00633E  1  A9 1B        baudreq: lda #$1B
+006340  1  20 10 63             jsr tx
+006343  1  A9 01                lda #$01
+006345  1  20 10 63             jsr tx
+006348  1  A9 42                lda #'B'
+00634A  1  20 10 63             jsr tx
+00634D  1  8A                   txa
+00634E  1  4C 10 63             jmp tx
+006351  1               
+006351  1               ; pausa de ~170 ms
+006351  1  A9 FF        pausa:  lda #$FF
+006353  1  4C A8 FC             jmp WAIT
+006356  1               
+006356  1               ; sumblk / vsumblk: soma de 16 bits dos 512 bytes de BUF em SUM / VSUM
+006356  1  A2 00        sumblk: ldx #0
+006358  1  80 02                bra sb
+00635A  1  A2 02        vsumblk: ldx #2
+00635C  1  A0 00        sb:     ldy #0
+00635E  1  B9 00 70     @a:     lda BUF,y
+006361  1  20 6E 63             jsr @add
+006364  1  B9 00 71             lda BUF+256,y
+006367  1  20 6E 63             jsr @add
+00636A  1  C8                   iny
+00636B  1  D0 F1                bne @a
+00636D  1  60                   rts
+00636E  1  18           @add:   clc
+00636F  1  7D 0B 60             adc SUM,x
+006372  1  9D 0B 60             sta SUM,x
+006375  1  90 03                bcc @n
+006377  1  FE 0C 60             inc SUM+1,x
+00637A  1  60           @n:     rts
+00637B  1               
+00637B  1  68           msg:    pla
+00637C  1  85 FA                sta P
+00637E  1  68                   pla
+00637F  1  85 FB                sta P+1
+006381  1  E6 FA        @m:     inc P
+006383  1  D0 02                bne @m2
+006385  1  E6 FB                inc P+1
+006387  1  B2 FA        @m2:    lda (P)
+006389  1  F0 07                beq @d
+00638B  1  09 80                ora #$80
+00638D  1  20 ED FD             jsr COUT
+006390  1  80 EF                bra @m
+006392  1  A5 FB        @d:     lda P+1
+006394  1  48                   pha
+006395  1  A5 FA                lda P
+006397  1  48                   pha
+006398  1  60                   rts
+006398  1               

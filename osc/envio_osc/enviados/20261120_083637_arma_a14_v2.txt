@@ -1,0 +1,10 @@
+:SYSTem:MENU MASK
+:TIMebase:SCALe 100E-9
+:CHANnel1:OFFSet 2.5
+:TER?
+:SINGle
+#wait 2
+:TER?
+:OPERegister:CONDition?
+:TIMebase:SCALe?
+#png a14_armado_v2

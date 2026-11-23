@@ -1,0 +1,4 @@
+Info (10281): Verilog HDL Declaration information at cffa_core_v16.v(32): object "LA0" differs only in case from object "la0" in the same scope
+Info (10281): Verilog HDL Declaration information at cffa_core_v16.v(32): object "LA1" differs only in case from object "la1" in the same scope
+Info (10281): Verilog HDL Declaration information at cffa_core_v16.v(32): object "LA2" differs only in case from object "la2" in the same scope
+Info (10281): Verilog HDL Declaration information at cffa_core_v16.v(34): object "BK13" differs only in case from object "bk13" in the same scope

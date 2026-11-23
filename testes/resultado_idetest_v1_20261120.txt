@@ -1,0 +1,16 @@
+Resultado do idetest_v1 (CFFA v1.2 do Rich no slot 7, Apple IIe Enhanced) - 2026-11-20
+Trecho do serial.log com o bit 7 removido (| = Return):
+
+[05:53:24.974] [ponte] envio: 6000.6010
+[05:53:25.825] 6000.6010||6000- 20 61 62 43 46 46 41 20|6008- 54 45 53 54 45 20 56 31|6010- 20|*
+[05:53:26.443] [ponte] envio: 6000G
+[05:53:27.318] 6000G|CFFA TESTE V1 - SLOT 7|MODELO: STI Flash 8.0.0                         |SERIAL:  STI1M92108065194147|FIRMWARE: 06/20/07|SETORES (LBA, HEX): 0001EA00|>INICIO ORIGINAL|
+[05:53:30.460] >FIM ORIGINAL SOMA=9AB7|>INICIO RAPIDO|
+[05:53:32.916] >FIM RAPIDO SOMA=9AB7|OK||*
+[05:53:36.488] [ponte] fim de idetest_v1_envio.txt (modo raw)
+
+Tempos (hora da ponte):
+  original: 05:53:27.318 -> 05:53:30.460 = 3,14 s para 256 setores (128 KB) = ~41 KB/s
+  rapido:   05:53:30.460 -> 05:53:32.916 = 2,46 s para 256 setores (128 KB) = ~52 KB/s
+  ganho: -22% de tempo / +28% de vazao; somas iguais (9AB7) = dados identicos.
+  Simulacao (so CPU): 2,49 s e 1,79 s -> o cartao acrescenta ~0,65 s / 256 setores (~2,5 ms por setor).

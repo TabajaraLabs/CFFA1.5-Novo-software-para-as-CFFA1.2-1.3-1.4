@@ -1,0 +1,2859 @@
+ca65 V2.18 - Ubuntu 2.19-1
+Main file   : cffamenu_v8.s
+Current file: cffamenu_v8.s
+
+000000r 1               ; cffamenu_v8.s - menu da CFFA v1.2 (firmware 1.4) para imagens ProDOS em cartao FAT16/FAT32
+000000r 1               ; Tabajara Labs, 2026-11-20. Arquivo CFFAMENU.BIN na raiz do cartao FAT; o carregador do banco 0
+000000r 1               ; (estagio 1) carrega em $4000 e chama $4004. Tambem roda do monitor (carregado pela serial): 4007G.
+000000r 1               ;   $4000: "CFM1" (assinatura conferida pelo carregador)
+000000r 1               ;   $4004: entrada do boot   (X = $n0; so funciona no slot 7). Menu se houver tecla ou nada montado.
+000000r 1               ;   $4007: entrada de teste  (menu sempre)
+000000r 1               ;   $400A: entrada de teste do boot (como $4004, mas chamada do monitor: 400AG)
+000000r 1               ; Grava a tabela de montagem no banco 4 ($CE80-$CEE0) e os nomes no banco 0 ($CEC0-$CEEC).
+000000r 1               ; v8: tempo de espera no boot configuravel (+/-: 0 a 30 s, com contagem regressiva; 0 = boot direto),
+000000r 1               ;     boot pelo drive 2 (CTRL-B), maca aberta segurada no boot (IIe/IIc) abre o menu, CLD nas entradas.
+000000r 1               ;     Os dois ajustes ficam no banco 0 em $CEF1 (espera) e $CEF2 (0 = drive 1, 1 = drive 2).
+000000r 1               ; v7: molduras em MouseText e barra com minusculas quando a maquina tem MouseText (IIe Enhanced, IIc, IIgs);
+000000r 1               ;     no II Plus e no IIe antigo continua com molduras em inverso.
+000000r 1               ; v6: ordem alfabetica (pastas primeiro), letra pula para a inicial, subpastas (RETURN entra),
+000000r 1               ;     nome do volume ProDOS da imagem marcada na linha 23, protecao com SHIFT+1-4.
+000000r 1               ; v5 (firmware 1.5): segundo cartao (escravo) e protecao contra escrita por drive (tecla P).
+000000r 1               ;     O bit 4 do 4o byte do LBA (bit 28) marca o escravo: vale para as imagens e para o diretorio.
+000000r 1               ; v4: setas na mesma pagina reescrevem so as 2 linhas da barra; versao no titulo.
+000000r 1               ; v3: sem piscar (a tela so e apagada ao abrir; depois cada tecla escreve por cima).
+000000r 1               ; v2: nomes longos (VFAT), ate 64 imagens, tela com molduras (estilo Locksmith 6.0), setas e paginas.
+000000r 1               ; Montar: ca65 --cpu 65C02 cffamenu_v1.s && ld65 -t none -S $4000 cffamenu_v8.o -o CFFAMENU.BIN
+000000r 1                       .setcpu "65C02"
+000000r 1                       .org $4000
+004000  1               
+004000  1               SLOT    = 7
+004000  1               IOB     = $C080 + SLOT*16
+004000  1               DATAH   = IOB+0
+004000  1               DATAL   = IOB+8
+004000  1               ERRREG  = IOB+9
+004000  1               SECCNT  = IOB+10
+004000  1               SECT    = IOB+11
+004000  1               CYL     = IOB+12
+004000  1               CYLH    = IOB+13
+004000  1               HEAD    = IOB+14
+004000  1               CMD     = IOB+15
+004000  1               STATUS  = IOB+15
+004000  1               WUNL    = IOB+3                 ; CPLD v1.6: escrever = destrava gravacao; ler = trava
+004000  1               BK0     = IOB+4                 ; qualquer acesso: banco 0
+004000  1               BK4     = IOB+5                 ; qualquer acesso: banco 4
+004000  1               DRVRST  = $0478 + SLOT          ; DriveResetDone do driver (zerar = refazer FatInit)
+004000  1               
+004000  1               COUT    = $FDED
+004000  1               CROUT   = $FD8E
+004000  1               PRBYTE  = $FDDA
+004000  1               HOME    = $FC58
+004000  1               RDKEY   = $FD0C
+004000  1               WAIT    = $FCA8
+004000  1               KBD     = $C000
+004000  1               KBDSTRB = $C010
+004000  1               
+004000  1               ROMCFG  = $CE80                 ; tabela do driver no banco 4 ($CE80-$CEE0, $CEE0 = 'C')
+004000  1               CFGLEN  = $61
+004000  1               ROMNAM  = $CEC0                 ; nomes no banco 0 ($CEC0-$CEEC, $CEEC = 'N')
+004000  1               NAMLEN  = 51                    ; 4x11 nomes, 'N', 4 bytes de cartao ($10 = escravo), v8: espera, drive do boot
+004000  1               
+004000  1               PTR     = $06
+004000  1               ENT     = $08
+004000  1               CP      = $EB                   ; ponteiro de trabalho (tabela nova)
+004000  1               MP      = $FA
+004000  1               TMP     = $FC
+004000  1               CNT     = $FD
+004000  1               LP      = $FE                   ; ponteiro para a entrada da lista de imagens
+004000  1               
+004000  1               SBUF    = $8800                 ; (o carregador do banco 0 fica em $2000-$2FFF: nao mexer)
+004000  1               FATB    = $8A00
+004000  1               V       = $8C00
+004000  1               LFNT    = $6000                 ; nomes longos: 64 x 32 bytes (ate 31 caracteres + 0)
+004000  1               LST     = $6800                 ; 64 imagens x 24 bytes: nome 11, bytes 20-21 e 26-31 da entrada (8), LBA do dir (4), indice (1)
+004000  1               NEWCFG  = $6E00                 ; tabela nova (97 bytes)
+004000  1               NEWNAM  = $6E80                 ; nomes novos (45 bytes)
+004000  1               OLD     = $6EC0                 ; copia de uma entrada da tabela (24 bytes)
+004000  1               LBUF    = $6F00                 ; nome longo em montagem (64 bytes)
+004000  1               MSG     = $6F40                 ; mensagem da linha 23 (64 bytes)
+004000  1               NIMAX   = 64
+004000  1               LN      = $EE                   ; ponteiro para o nome longo
+004000  1               
+004000  1               vLBA    = 0
+004000  1               vPST    = 4
+004000  1               vFATST  = 8
+004000  1               vROOTST = 12
+004000  1               vDATAST = 16
+004000  1               vROOTCL = 20
+004000  1               vFATSZ  = 24
+004000  1               vT1     = 28
+004000  1               vCLUS   = 32
+004000  1               vFCACHE = 36
+004000  1               vDIRL   = 40
+004000  1               vFCL    = 44
+004000  1               vFSZ    = 48
+004000  1               vNCL    = 52
+004000  1               vT2     = 56
+004000  1               vNXT    = 60
+004000  1               vDCL    = 64
+004000  1               SPCV    = V+68
+004000  1               SPSH    = V+69
+004000  1               NFAT    = V+70
+004000  1               FTYP    = V+71
+004000  1               RSECS   = V+72
+004000  1               SLEFT   = V+74
+004000  1               CVAL    = V+75
+004000  1               NIMG    = V+76
+004000  1               FRAG    = V+77
+004000  1               FOFS    = V+78
+004000  1               SAVSP   = V+80
+004000  1               ESZ     = V+81
+004000  1               FORCE   = V+82
+004000  1               DRV     = V+83
+004000  1               SEL     = V+84
+004000  1               BANKS   = V+85
+004000  1               SCOL    = V+90
+004000  1               INV     = V+91
+004000  1               LIM     = V+92
+004000  1               NUM     = V+93                  ; 2 bytes
+004000  1               DIG     = V+95                  ; 5 bytes
+004000  1               NIT     = V+100
+004000  1               CUR     = V+101
+004000  1               TOP     = V+102
+004000  1               ROW     = V+103
+004000  1               ITEM    = V+104
+004000  1               LFOK    = V+105
+004000  1               LSUM    = V+106
+004000  1               CSUM    = V+107
+004000  1               MDRV    = V+108
+004000  1               FULL    = V+109                 ; 1 = redesenhar a tela toda
+004000  1               OCUR    = V+110
+004000  1               OTOP    = V+111
+004000  1               DEVB    = V+112                 ; $00 = mestre, $10 = escravo (bit 4 do byte 3 do LBA)
+004000  1               HASSL   = V+113                 ; 1 = escravo presente
+004000  1               VSER    = V+114                 ; numero de serie do volume FAT lido por ultimo (4 bytes)
+004000  1               MSER    = V+118                 ; numero de serie do volume do mestre
+004000  1               vSTCL   = 122                   ; cluster inicial da pasta a listar (4 bytes, deslocamento em V)
+004000  1               INSUB   = V+126                 ; 1 = listando uma subpasta
+004000  1               USESTCL = V+127                 ; 1 = scan2 comeca em vSTCL
+004000  1               ISFOLD  = V+128                 ; $80 = a entrada sendo guardada e uma pasta
+004000  1               OCURV   = V+129                 ; CUR para o qual VOLMSG foi calculado
+004000  1               KEYI    = V+130
+004000  1               T1F     = V+131
+004000  1               T2      = V+132
+004000  1               CMPA    = V+133
+004000  1               CMPB    = V+134
+004000  1               ORDER   = $7100                 ; ordem de exibicao (indices da lista)
+004000  1               VOLMSG  = $7140                 ; "VOLUME /NOME" da imagem marcada
+004000  1               LA      = $E3                   ; ponteiro auxiliar (nome A na comparacao)
+004000  1               MT      = V+135                 ; v7: 1 = MouseText disponivel (conjunto alternativo ligado)
+004000  1               BROW    = V+136                 ; v7: linha da moldura sendo desenhada
+004000  1               CDN     = V+137                 ; v8: segundos que faltam na contagem do boot
+004000  1               MI      = V+138                 ; v8: indice de escrita em MSG
+004000  1               JV      = V+139                 ; v8: endereco do driver (2 bytes)
+004000  1               TMOUT   = NEWNAM+49             ; v8: espera do boot em segundos
+004000  1               BOOTD   = NEWNAM+50             ; v8: 0 = boot pelo drive 1, 1 = pelo drive 2
+004000  1               SETALT  = $C00F                 ; escrever: conjunto alternativo (MouseText + inverso minusculo)
+004000  1               CLRALT  = $C00E                 ; escrever: conjunto principal
+004000  1               VS0     = $6F80                 ; parametros da FAT do mestre (76 bytes + ESZ)
+004000  1               VS1     = $7000                 ; parametros da FAT do escravo                 ; drive escolhido no menu (o DRV e contador do draw)
+004000  1               
+004000  1               ; ============================================================================
+004000  1  43 46 4D 31          .byte "CFM1"
+004004  1  4C 0C 40             jmp boot                ; $4004
+004007  1  4C 17 40             jmp menuent             ; $4007
+00400A  1  A2 70                ldx #SLOT*16            ; $400A: teste do boot a partir do monitor
+00400C  1               
+00400C  1  D8           boot:   cld                     ; v8: o G do monitor restaura P de $48 (o ProDOS deixa $FF = decimal)
+00400D  1  E0 70                cpx #SLOT*16
+00400F  1  F0 01                beq @ok
+004011  1  60                   rts                     ; outro slot: o utilitario so conhece o slot 7
+004012  1  9C 52 8C     @ok:    stz FORCE
+004015  1  80 06                bra main
+004017  1  D8           menuent: cld
+004018  1  A9 01                lda #1
+00401A  1  8D 52 8C             sta FORCE
+00401D  1  BA           main:   tsx
+00401E  1  8E 50 8C             stx SAVSP
+004021  1  9C 87 8C             stz MT                  ; v7: MouseText = IIe ($FBB3=$06) que nao seja o IIe antigo ($FBC0=$EA)
+004024  1  AD B3 FB             lda $FBB3
+004027  1  C9 06                cmp #$06
+004029  1  D0 0A                bne @nmt
+00402B  1  AD C0 FB             lda $FBC0
+00402E  1  C9 EA                cmp #$EA
+004030  1  F0 03                beq @nmt
+004032  1  EE 87 8C             inc MT
+004035  1               @nmt:
+004035  1  20 E5 41             jsr romon
+004038  1  9C 4B 8C             stz CVAL
+00403B  1  20 EF 41             jsr fsinit
+00403E  1  90 25                bcc @fat
+004040  1  20 D2 56             jsr msg
+004043  1  43 46 46 41          .byte "CFFA: CARTAO NAO E FAT16/FAT32",0
+004047  1  3A 20 43 41  
+00404B  1  52 54 41 4F  
+004062  1  4C 8E FD             jmp CROUT
+004065  1  20 66 45     @fat:   jsr scanall2
+004068  1  20 43 48             jsr loadcfg
+00406B  1  20 D5 48             jsr resolve
+00406E  1  AD 52 8C             lda FORCE
+004071  1  D0 60                bne @menu
+004073  1  A2 00                ldx #0                  ; algum drive montado?
+004075  1  BD 00 6E     @any:   lda NEWCFG,x
+004078  1  30 0B                bmi @some
+00407A  1  8A                   txa
+00407B  1  18                   clc
+00407C  1  69 18                adc #24
+00407E  1  AA                   tax
+00407F  1  E0 60                cpx #96
+004081  1  D0 F2                bne @any
+004083  1  80 4E                bra @menu               ; nada montado: menu
+004085  1  AD 4C 8C     @some:  lda NIMG
+004088  1  1A                   inc a
+004089  1  8D 64 8C             sta NIT
+00408C  1  9C 65 8C             stz CUR
+00408F  1  9C 66 8C             stz TOP
+004092  1  AD B3 FB             lda $FBB3               ; v8: IIe/IIc: maca aberta segurada abre o menu (no II Plus o botao
+004095  1  C9 06                cmp #$06                ;     pode flutuar em 1 sem joystick: so olha no IIe/IIc)
+004097  1  D0 05                bne @nb
+004099  1  AD 61 C0             lda $C061
+00409C  1  30 35                bmi @menu
+00409E  1  AD 00 C0     @nb:    lda KBD                 ; tecla apertada durante o boot: menu
+0040A1  1  30 2D                bmi @key
+0040A3  1  AD B1 6E             lda TMOUT               ; v8: 0 = boot direto, sem tela
+0040A6  1  F0 30                beq @save
+0040A8  1  8D 89 8C             sta CDN
+0040AB  1  20 F4 40             jsr cdmsg
+0040AE  1  20 2B 4C             jsr cls
+0040B1  1  20 49 4C             jsr draw
+0040B4  1  A2 18        @sec:   ldx #24                 ; ~1 s = 24 x 42 ms olhando o teclado
+0040B6  1  AD 00 C0     @w:     lda KBD
+0040B9  1  30 15                bmi @key
+0040BB  1  A9 80                lda #$80
+0040BD  1  20 A8 FC             jsr WAIT
+0040C0  1  CA                   dex
+0040C1  1  D0 F3                bne @w
+0040C3  1  CE 89 8C             dec CDN
+0040C6  1  F0 10                beq @save
+0040C8  1  20 F4 40             jsr cdmsg               ; so as linhas 22-23 sao reescritas a cada segundo
+0040CB  1  20 57 4E             jsr dmsg
+0040CE  1  80 E4                bra @sec
+0040D0  1  8D 10 C0     @key:   sta KBDSTRB
+0040D3  1  20 C0 4F     @menu:  jsr menu
+0040D6  1  B0 03                bcs @exit               ; ESC: sai sem gravar
+0040D8  1  20 B4 53     @save:  jsr save
+0040DB  1  AD 87 8C     @exit:  lda MT                  ; v7: volta ao conjunto de caracteres normal
+0040DE  1  F0 03                beq @ex2
+0040E0  1  8D 0E C0             sta CLRALT
+0040E3  1  20 E5 41     @ex2:   jsr romon
+0040E6  1  AD 52 8C             lda FORCE               ; v8: no boot, drive 2 escolhido e montado: o menu mesmo da o boot
+0040E9  1  D0 08                bne @r
+0040EB  1  20 8D 41             jsr bdrom
+0040EE  1  F0 03                beq @r
+0040F0  1  4C AF 41             jmp boot2
+0040F3  1  60           @r:     rts
+0040F4  1               
+0040F4  1               ; cdmsg: MSG = "BOOT DO DRIVE n EM ss S. TECLA = MENU" (v8)
+0040F4  1  20 90 4F     cdmsg:  jsr setmsg
+0040F7  1  42 4F 4F 54          .byte "BOOT DO DRIVE ",0
+0040FB  1  20 44 4F 20  
+0040FF  1  44 52 49 56  
+004106  1  8C 8A 8C             sty MI
+004109  1  20 7D 41             jsr bdnew
+00410C  1  18                   clc
+00410D  1  69 31                adc #'1'
+00410F  1  20 35 41             jsr mput
+004112  1  20 47 41             jsr mcat
+004115  1  20 45 4D 20          .byte " EM ",0
+004119  1  00           
+00411A  1  AD 89 8C             lda CDN
+00411D  1  20 63 41             jsr mdec
+004120  1  20 47 41             jsr mcat
+004123  1  20 53 2E 20          .byte " S. TECLA = MENU",0
+004127  1  54 45 43 4C  
+00412B  1  41 20 3D 20  
+004134  1  60                   rts
+004135  1               
+004135  1               ; mput: acrescenta A em MSG; mcat: acrescenta o texto inline; mdec: A (0-99) em decimal
+004135  1  5A           mput:   phy
+004136  1  AC 8A 8C             ldy MI
+004139  1  99 40 6F             sta MSG,y
+00413C  1  C8                   iny
+00413D  1  A9 00                lda #0
+00413F  1  99 40 6F             sta MSG,y
+004142  1  8C 8A 8C             sty MI
+004145  1  7A                   ply
+004146  1  60                   rts
+004147  1  68           mcat:   pla
+004148  1  85 FA                sta MP
+00414A  1  68                   pla
+00414B  1  85 FB                sta MP+1
+00414D  1  E6 FA        @m:     inc MP
+00414F  1  D0 02                bne @m2
+004151  1  E6 FB                inc MP+1
+004153  1  B2 FA        @m2:    lda (MP)
+004155  1  F0 05                beq @d
+004157  1  20 35 41             jsr mput
+00415A  1  80 F1                bra @m
+00415C  1  A5 FB        @d:     lda MP+1
+00415E  1  48                   pha
+00415F  1  A5 FA                lda MP
+004161  1  48                   pha
+004162  1  60                   rts
+004163  1  A2 00        mdec:   ldx #0
+004165  1  C9 0A        @t:     cmp #10
+004167  1  90 05                bcc @u
+004169  1  E9 0A                sbc #10
+00416B  1  E8                   inx
+00416C  1  80 F7                bra @t
+00416E  1  48           @u:     pha
+00416F  1  8A                   txa
+004170  1  F0 05                beq @1
+004172  1  09 30                ora #'0'
+004174  1  20 35 41             jsr mput
+004177  1  68           @1:     pla
+004178  1  09 30                ora #'0'
+00417A  1  4C 35 41             jmp mput
+00417D  1               
+00417D  1               ; bdnew: A = 1 (Z=0) se o boot vai ser pelo drive 2 (escolhido e montado na tabela nova)
+00417D  1  AD B2 6E     bdnew:  lda BOOTD
+004180  1  F0 0A                beq @n
+004182  1  AD 18 6E             lda NEWCFG+24
+004185  1  10 03                bpl @n0
+004187  1  A9 01                lda #1
+004189  1  60                   rts
+00418A  1  A9 00        @n0:    lda #0
+00418C  1  60           @n:     rts
+00418D  1               
+00418D  1               ; bdrom: o mesmo pela EEPROM (vale depois de gravar e tambem depois do ESC, que nao grava)
+00418D  1  AD F4 C0     bdrom:  lda BK0
+004190  1  AD EC CE             lda ROMNAM+44
+004193  1  C9 4E                cmp #'N'
+004195  1  D0 12                bne @n
+004197  1  AD F2 CE             lda ROMNAM+50
+00419A  1  C9 01                cmp #1
+00419C  1  D0 0B                bne @n
+00419E  1  AD F5 C0             lda BK4
+0041A1  1  AD 98 CE             lda ROMCFG+24
+0041A4  1  10 03                bpl @n
+0041A6  1  A9 01                lda #1
+0041A8  1  60                   rts
+0041A9  1  AD F5 C0     @n:     lda BK4
+0041AC  1  A9 00                lda #0
+0041AE  1  60                   rts
+0041AF  1               
+0041AF  1               ; boot2: le o bloco 0 do drive 2 em $0800 e entra nele com X = $F0 (unidade: slot 7, drive 2).
+0041AF  1               ; O bloco de boot do ProDOS faz STX $43: o ProDOS inteiro e carregado do drive 2 e ele vira o prefixo.
+0041AF  1               ; Se a leitura falhar, volta e o boot segue normal pelo drive 1.
+0041AF  1  A9 01        boot2:  lda #1                  ; READ
+0041B1  1  85 42                sta $42
+0041B3  1  A9 F0                lda #SLOT*16+$80
+0041B5  1  85 43                sta $43
+0041B7  1  64 44                stz $44
+0041B9  1  A9 08                lda #$08
+0041BB  1  85 45                sta $45
+0041BD  1  64 46                stz $46
+0041BF  1  64 47                stz $47
+0041C1  1  9C 7F 04             stz DRVRST              ; o driver refaz o FatInit (a tabela pode ter mudado)
+0041C4  1  20 E5 41             jsr romon
+0041C7  1  AD FF C7             lda $C000+SLOT*256+$FF  ; $C7FF = entrada do driver ProDOS
+0041CA  1  8D 8B 8C             sta JV
+0041CD  1  A9 C7                lda #$C0+SLOT
+0041CF  1  8D 8C 8C             sta JV+1
+0041D2  1  20 E2 41             jsr @call
+0041D5  1  B0 0A                bcs @x
+0041D7  1  AD 01 08             lda $0801               ; bloco vazio: nao entra
+0041DA  1  F0 05                beq @x
+0041DC  1  A2 F0                ldx #SLOT*16+$80
+0041DE  1  4C 01 08             jmp $0801
+0041E1  1  60           @x:     rts
+0041E2  1  6C 8B 8C     @call:  jmp (JV)
+0041E5  1               
+0041E5  1               ; religa a ROM $C800 desta placa e seleciona o banco 4
+0041E5  1  2C FF CF     romon:  bit $CFFF
+0041E8  1  AD 00 C7             lda $C000+SLOT*256      ; $C700: liga a ROM $C800 do slot 7
+0041EB  1  AD F5 C0             lda BK4
+0041EE  1  60                   rts
+0041EF  1               
+0041EF  1               ; ============================================================================
+0041EF  1               ; fsinit: le MBR/VBR e o BPB. C=1 se nao for FAT16/FAT32
+0041EF  1  A2 00        fsinit: ldx #vLBA
+0041F1  1  20 8E 55             jsr zero32
+0041F4  1  A2 04                ldx #vPST
+0041F6  1  20 8E 55             jsr zero32
+0041F9  1  AD 70 8C             lda DEVB                ; bit 28 = cartao escravo (passa para todos os LBAs calculados)
+0041FC  1  8D 03 8C             sta V+vLBA+3
+0041FF  1  8D 07 8C             sta V+vPST+3
+004202  1  20 4D 56             jsr rdsec_s
+004205  1  B0 20                bcs @no
+004207  1  AD FE 89             lda SBUF+$1FE
+00420A  1  C9 55                cmp #$55
+00420C  1  D0 19                bne @no
+00420E  1  AD FF 89             lda SBUF+$1FF
+004211  1  C9 AA                cmp #$AA
+004213  1  D0 12                bne @no
+004215  1  20 2C 43             jsr isvbr
+004218  1  90 33                bcc @parse
+00421A  1  AD C2 89             lda SBUF+$1C2
+00421D  1  A2 05                ldx #5
+00421F  1  DD 26 43     @tp:    cmp fattypes,x
+004222  1  F0 05                beq @ok
+004224  1  CA                   dex
+004225  1  10 F8                bpl @tp
+004227  1  38           @no:    sec
+004228  1  60                   rts
+004229  1  A2 03        @ok:    ldx #3
+00422B  1  BD C6 89     @cp:    lda SBUF+$1C6,x
+00422E  1  9D 04 8C             sta V+vPST,x
+004231  1  9D 00 8C             sta V+vLBA,x
+004234  1  CA                   dex
+004235  1  10 F4                bpl @cp
+004237  1  AD 07 8C             lda V+vPST+3
+00423A  1  0D 70 8C             ora DEVB
+00423D  1  8D 07 8C             sta V+vPST+3
+004240  1  8D 03 8C             sta V+vLBA+3
+004243  1  20 4D 56             jsr rdsec_s
+004246  1  B0 DF                bcs @no
+004248  1  20 2C 43             jsr isvbr
+00424B  1  B0 DA                bcs @no
+00424D  1  AD 0D 88     @parse: lda SBUF+$0D
+004250  1  8D 44 8C             sta SPCV
+004253  1  A2 00                ldx #0
+004255  1  4A           @sh:    lsr
+004256  1  B0 05                bcs @shd
+004258  1  E8                   inx
+004259  1  E0 08                cpx #8
+00425B  1  D0 F8                bne @sh
+00425D  1  8E 45 8C     @shd:   stx SPSH
+004260  1  AD 10 88             lda SBUF+$10
+004263  1  8D 46 8C             sta NFAT
+004266  1  A2 1C                ldx #vT1
+004268  1  20 8E 55             jsr zero32
+00426B  1  AD 0E 88             lda SBUF+$0E
+00426E  1  8D 1C 8C             sta V+vT1
+004271  1  AD 0F 88             lda SBUF+$0F
+004274  1  8D 1D 8C             sta V+vT1+1
+004277  1  A2 08                ldx #vFATST
+004279  1  A0 04                ldy #vPST
+00427B  1  20 9B 55             jsr cpy32
+00427E  1  A0 1C                ldy #vT1
+004280  1  20 B4 55             jsr add32
+004283  1  A2 18                ldx #vFATSZ
+004285  1  20 8E 55             jsr zero32
+004288  1  AD 16 88             lda SBUF+$16
+00428B  1  0D 17 88             ora SBUF+$17
+00428E  1  F0 1D                beq @f32
+004290  1  AD 3A 88             lda SBUF+$3A            ; "FAT12" recusada
+004293  1  C9 32                cmp #'2'
+004295  1  F0 90                beq @no
+004297  1  9C 47 8C             stz FTYP
+00429A  1  A9 02                lda #2
+00429C  1  8D 51 8C             sta ESZ
+00429F  1  AD 16 88             lda SBUF+$16
+0042A2  1  8D 18 8C             sta V+vFATSZ
+0042A5  1  AD 17 88             lda SBUF+$17
+0042A8  1  8D 19 8C             sta V+vFATSZ+1
+0042AB  1  80 1B                bra @fz
+0042AD  1  A9 01        @f32:   lda #1
+0042AF  1  8D 47 8C             sta FTYP
+0042B2  1  A9 04                lda #4
+0042B4  1  8D 51 8C             sta ESZ
+0042B7  1  A2 03                ldx #3
+0042B9  1  BD 24 88     @c32:   lda SBUF+$24,x
+0042BC  1  9D 18 8C             sta V+vFATSZ,x
+0042BF  1  BD 2C 88             lda SBUF+$2C,x
+0042C2  1  9D 14 8C             sta V+vROOTCL,x
+0042C5  1  CA                   dex
+0042C6  1  10 F1                bpl @c32
+0042C8  1  A2 0C        @fz:    ldx #vROOTST
+0042CA  1  A0 08                ldy #vFATST
+0042CC  1  20 9B 55             jsr cpy32
+0042CF  1  AD 46 8C             lda NFAT
+0042D2  1  85 FD                sta CNT
+0042D4  1  A0 18        @nf:    ldy #vFATSZ
+0042D6  1  20 B4 55             jsr add32
+0042D9  1  C6 FD                dec CNT
+0042DB  1  D0 F7                bne @nf
+0042DD  1  A2 1C                ldx #vT1
+0042DF  1  20 8E 55             jsr zero32
+0042E2  1  AD 11 88             lda SBUF+$11
+0042E5  1  8D 1C 8C             sta V+vT1
+0042E8  1  AD 12 88             lda SBUF+$12
+0042EB  1  8D 1D 8C             sta V+vT1+1
+0042EE  1  A0 04                ldy #4
+0042F0  1  4E 1D 8C     @d16:   lsr V+vT1+1
+0042F3  1  6E 1C 8C             ror V+vT1
+0042F6  1  88                   dey
+0042F7  1  D0 F7                bne @d16
+0042F9  1  AD 1C 8C             lda V+vT1
+0042FC  1  8D 48 8C             sta RSECS
+0042FF  1  AD 1D 8C             lda V+vT1+1
+004302  1  8D 49 8C             sta RSECS+1
+004305  1  A2 10                ldx #vDATAST
+004307  1  A0 0C                ldy #vROOTST
+004309  1  20 9B 55             jsr cpy32
+00430C  1  A0 1C                ldy #vT1
+00430E  1  20 B4 55             jsr add32
+004311  1  A2 03                ldx #3                  ; v5: numero de serie do volume (FAT32 em $43, FAT16 em $27)
+004313  1  BD 27 88     @sn:    lda SBUF+$27,x
+004316  1  AC 47 8C             ldy FTYP
+004319  1  F0 03                beq @s16
+00431B  1  BD 43 88             lda SBUF+$43,x
+00431E  1  9D 72 8C     @s16:   sta VSER,x
+004321  1  CA                   dex
+004322  1  10 EF                bpl @sn
+004324  1  18                   clc
+004325  1  60                   rts
+004326  1  04 06 0E 0B  fattypes: .byte $04,$06,$0E,$0B,$0C,$01
+00432A  1  0C 01        
+00432C  1               
+00432C  1  AD 00 88     isvbr:  lda SBUF
+00432F  1  C9 EB                cmp #$EB
+004331  1  F0 04                beq @j
+004333  1  C9 E9                cmp #$E9
+004335  1  D0 17                bne @no
+004337  1  AD 0B 88     @j:     lda SBUF+$0B
+00433A  1  D0 12                bne @no
+00433C  1  AD 0C 88             lda SBUF+$0C
+00433F  1  C9 02                cmp #2
+004341  1  D0 0B                bne @no
+004343  1  AD 10 88             lda SBUF+$10
+004346  1  F0 06                beq @no
+004348  1  C9 03                cmp #3
+00434A  1  B0 02                bcs @no
+00434C  1  18                   clc
+00434D  1  60                   rts
+00434E  1  38           @no:    sec
+00434F  1  60                   rts
+004350  1               
+004350  1               ; ============================================================================
+004350  1               ; scan: percorre o diretorio raiz e guarda as imagens em LST (ate 16)
+004350  1  9C 4C 8C     scan:   stz NIMG
+004353  1  AD 7F 8C     scan2:  lda USESTCL             ; v6: subpasta = cadeia de clusters a partir de vSTCL
+004356  1  F0 09                beq @norm
+004358  1  A2 40                ldx #vDCL
+00435A  1  A0 7A                ldy #vSTCL
+00435C  1  20 9B 55             jsr cpy32
+00435F  1  80 32                bra @dc
+004361  1  AD 47 8C     @norm:  lda FTYP
+004364  1  D0 26                bne @d32
+004366  1  A2 28                ldx #vDIRL
+004368  1  A0 0C                ldy #vROOTST
+00436A  1  20 9B 55             jsr cpy32
+00436D  1  AD 48 8C     @ds:    lda RSECS
+004370  1  0D 49 8C             ora RSECS+1
+004373  1  F0 59                beq @end
+004375  1  20 CF 43             jsr dirsec
+004378  1  B0 54                bcs @end
+00437A  1  A2 28                ldx #vDIRL
+00437C  1  20 DA 55             jsr inc32
+00437F  1  AD 48 8C             lda RSECS
+004382  1  D0 03                bne @dd
+004384  1  CE 49 8C             dec RSECS+1
+004387  1  CE 48 8C     @dd:    dec RSECS
+00438A  1  80 E1                bra @ds
+00438C  1  A2 40        @d32:   ldx #vDCL
+00438E  1  A0 14                ldy #vROOTCL
+004390  1  20 9B 55             jsr cpy32
+004393  1  A2 20        @dc:    ldx #vCLUS
+004395  1  A0 40                ldy #vDCL
+004397  1  20 9B 55             jsr cpy32
+00439A  1  20 57 54             jsr c2l
+00439D  1  A2 28                ldx #vDIRL
+00439F  1  A0 00                ldy #vLBA
+0043A1  1  20 9B 55             jsr cpy32
+0043A4  1  AD 44 8C             lda SPCV
+0043A7  1  8D 4A 8C             sta SLEFT
+0043AA  1  20 CF 43     @dsc:   jsr dirsec
+0043AD  1  B0 1F                bcs @end
+0043AF  1  A2 28                ldx #vDIRL
+0043B1  1  20 DA 55             jsr inc32
+0043B4  1  CE 4A 8C             dec SLEFT
+0043B7  1  D0 F1                bne @dsc
+0043B9  1  A2 20                ldx #vCLUS
+0043BB  1  A0 40                ldy #vDCL
+0043BD  1  20 9B 55             jsr cpy32
+0043C0  1  20 96 54             jsr fatnext
+0043C3  1  B0 09                bcs @end
+0043C5  1  A2 40                ldx #vDCL
+0043C7  1  A0 3C                ldy #vNXT
+0043C9  1  20 9B 55             jsr cpy32
+0043CC  1  80 C5                bra @dc
+0043CE  1  60           @end:   rts
+0043CF  1               
+0043CF  1  A2 00        dirsec: ldx #vLBA
+0043D1  1  A0 28                ldy #vDIRL
+0043D3  1  20 9B 55             jsr cpy32
+0043D6  1  20 4D 56             jsr rdsec_s
+0043D9  1  90 03                bcc @ok
+0043DB  1  4C 34 54             jmp ioerr
+0043DE  1  A9 00        @ok:    lda #<SBUF
+0043E0  1  85 08                sta ENT
+0043E2  1  A9 88                lda #>SBUF
+0043E4  1  85 09                sta ENT+1
+0043E6  1  B2 08        @e:     lda (ENT)
+0043E8  1  D0 02                bne @nz
+0043EA  1  38                   sec
+0043EB  1  60                   rts
+0043EC  1  20 02 44     @nz:    jsr entry
+0043EF  1  18                   clc
+0043F0  1  A5 08                lda ENT
+0043F2  1  69 20                adc #32
+0043F4  1  85 08                sta ENT
+0043F6  1  90 EE                bcc @e
+0043F8  1  E6 09                inc ENT+1
+0043FA  1  A5 09                lda ENT+1
+0043FC  1  C9 8A                cmp #>(SBUF+512)
+0043FE  1  D0 E6                bne @e
+004400  1  18                   clc
+004401  1  60                   rts
+004402  1               
+004402  1  B2 08        entry:  lda (ENT)
+004404  1  C9 E5                cmp #$E5                ; apagada
+004406  1  F0 57                beq @clr
+004408  1  A0 0B                ldy #11
+00440A  1  B1 08                lda (ENT),y
+00440C  1  C9 0F                cmp #$0F                ; pedaco de nome longo
+00440E  1  D0 03                bne @sfn
+004410  1  4C 6C 44             jmp lfnent
+004413  1  29 08        @sfn:   and #$08                ; rotulo de volume
+004415  1  D0 48                bne @clr
+004417  1  B1 08                lda (ENT),y
+004419  1  29 10                and #$10
+00441B  1  F0 18                beq @file
+00441D  1  B2 08                lda (ENT)               ; pasta: ignora "."
+00441F  1  C9 2E                cmp #'.'
+004421  1  D0 08                bne @fold
+004423  1  A0 01                ldy #1
+004425  1  B1 08                lda (ENT),y
+004427  1  C9 20                cmp #' '
+004429  1  F0 34                beq @clr
+00442B  1  A9 80        @fold:  lda #$80
+00442D  1  8D 80 8C             sta ISFOLD
+004430  1  20 F2 44             jsr image
+004433  1  80 2A                bra @clr
+004435  1  9C 80 8C     @file:  stz ISFOLD
+004438  1  A2 00                ldx #0
+00443A  1  A0 08        @ext:   ldy #8
+00443C  1  B1 08                lda (ENT),y
+00443E  1  DD 63 44             cmp exts,x
+004441  1  D0 15                bne @nx
+004443  1  C8                   iny
+004444  1  B1 08                lda (ENT),y
+004446  1  DD 64 44             cmp exts+1,x
+004449  1  D0 0D                bne @nx
+00444B  1  C8                   iny
+00444C  1  B1 08                lda (ENT),y
+00444E  1  DD 65 44             cmp exts+2,x
+004451  1  D0 05                bne @nx
+004453  1  20 F2 44             jsr image
+004456  1  80 07                bra @clr
+004458  1  E8           @nx:    inx
+004459  1  E8                   inx
+00445A  1  E8                   inx
+00445B  1  E0 09                cpx #9
+00445D  1  D0 DB                bne @ext
+00445F  1  9C 69 8C     @clr:   stz LFOK
+004462  1  60                   rts
+004463  1  50 4F 20 48  exts:   .byte "PO ","HDV","IMG"
+004467  1  44 56 49 4D  
+00446B  1  47           
+00446C  1               
+00446C  1               ; lfnent: guarda um pedaco do nome longo (13 caracteres UTF-16) em LBUF
+00446C  1  B2 08        lfnent: lda (ENT)
+00446E  1  29 40                and #$40                ; primeiro pedaco gravado (= ultimo do nome)?
+004470  1  F0 18                beq @cont
+004472  1  A0 3F                ldy #63
+004474  1  A9 00                lda #0
+004476  1  99 00 6F     @c:     sta LBUF,y
+004479  1  88                   dey
+00447A  1  10 FA                bpl @c
+00447C  1  A0 0D                ldy #13
+00447E  1  B1 08                lda (ENT),y
+004480  1  8D 6A 8C             sta LSUM
+004483  1  A9 01                lda #1
+004485  1  8D 69 8C             sta LFOK
+004488  1  80 0E                bra @put
+00448A  1  AD 69 8C     @cont:  lda LFOK
+00448D  1  F0 55                beq @x
+00448F  1  A0 0D                ldy #13
+004491  1  B1 08                lda (ENT),y
+004493  1  CD 6A 8C             cmp LSUM
+004496  1  D0 49                bne @bad
+004498  1  B2 08        @put:   lda (ENT)
+00449A  1  29 1F                and #$1F
+00449C  1  F0 43                beq @bad
+00449E  1  3A                   dec a                   ; posicao = (seq-1)*13
+00449F  1  85 FC                sta TMP
+0044A1  1  0A                   asl
+0044A2  1  0A                   asl
+0044A3  1  65 FC                adc TMP                 ; *5
+0044A5  1  0A                   asl                     ; *10
+0044A6  1  65 FC                adc TMP
+0044A8  1  65 FC                adc TMP
+0044AA  1  65 FC                adc TMP                 ; *13
+0044AC  1  85 FD                sta CNT
+0044AE  1  A2 00                ldx #0
+0044B0  1  A5 FD        @ch:    lda CNT
+0044B2  1  C9 3F                cmp #63
+0044B4  1  B0 2E                bcs @x                  ; so os 63 primeiros caracteres
+0044B6  1  BC E5 44             ldy lofs,x
+0044B9  1  C8                   iny
+0044BA  1  B1 08                lda (ENT),y             ; byte alto
+0044BC  1  88                   dey
+0044BD  1  C9 FF                cmp #$FF
+0044BF  1  F0 1F                beq @end                ; $FFFF = enchimento
+0044C1  1  C9 00                cmp #0
+0044C3  1  D0 0C                bne @q
+0044C5  1  B1 08                lda (ENT),y
+0044C7  1  F0 17                beq @end                ; $0000 = fim do nome
+0044C9  1  C9 20                cmp #$20
+0044CB  1  90 04                bcc @q
+0044CD  1  C9 7F                cmp #$7F
+0044CF  1  90 02                bcc @st
+0044D1  1  A9 3F        @q:     lda #'?'
+0044D3  1  A4 FD        @st:    ldy CNT
+0044D5  1  99 00 6F             sta LBUF,y
+0044D8  1  E6 FD                inc CNT
+0044DA  1  E8                   inx
+0044DB  1  E0 0D                cpx #13
+0044DD  1  D0 D1                bne @ch
+0044DF  1  60                   rts
+0044E0  1  60           @end:   rts
+0044E1  1  9C 69 8C     @bad:   stz LFOK
+0044E4  1  60           @x:     rts
+0044E5  1  01 03 05 07  lofs:   .byte 1,3,5,7,9,14,16,18,20,22,24,28,30
+0044E9  1  09 0E 10 12  
+0044ED  1  14 16 18 1C  
+0044F2  1               
+0044F2  1  2C 80 8C     image:  bit ISFOLD                ; pasta: aceita cluster 0 (".." apontando para a raiz)
+0044F5  1  30 10                bmi @go
+0044F7  1  A0 1A                ldy #$1A                ; cluster 0 = vazio: ignora
+0044F9  1  B1 08                lda (ENT),y
+0044FB  1  C8                   iny
+0044FC  1  11 08                ora (ENT),y
+0044FE  1  A0 14                ldy #$14
+004500  1  11 08                ora (ENT),y
+004502  1  C8                   iny
+004503  1  11 08                ora (ENT),y
+004505  1  F0 50                beq @x
+004507  1  AD 4C 8C     @go:    lda NIMG
+00450A  1  C9 40                cmp #NIMAX
+00450C  1  B0 49                bcs @x
+00450E  1  20 1A 47             jsr lfnset              ; nome longo (se a soma de conferencia bater)
+004511  1  AD 4C 8C             lda NIMG
+004514  1  20 E6 46             jsr lstptr
+004517  1  A0 0A                ldy #10
+004519  1  B1 08        @n:     lda (ENT),y
+00451B  1  91 FE                sta (LP),y
+00451D  1  88                   dey
+00451E  1  10 F9                bpl @n
+004520  1  A2 07                ldx #7                  ; bytes 20-21 e 26-31 da entrada -> LP+11..18
+004522  1  BC 58 45     @r:     ldy rawofs,x
+004525  1  B1 08                lda (ENT),y
+004527  1  48                   pha
+004528  1  8A                   txa
+004529  1  18                   clc
+00452A  1  69 0B                adc #11
+00452C  1  A8                   tay
+00452D  1  68                   pla
+00452E  1  91 FE                sta (LP),y
+004530  1  CA                   dex
+004531  1  10 EF                bpl @r
+004533  1  A2 00                ldx #0                  ; LBA do setor de diretorio -> LP+19..22
+004535  1  A0 13                ldy #19
+004537  1  BD 28 8C     @l:     lda V+vDIRL,x
+00453A  1  91 FE                sta (LP),y
+00453C  1  C8                   iny
+00453D  1  E8                   inx
+00453E  1  E0 04                cpx #4
+004540  1  D0 F5                bne @l
+004542  1  A5 09                lda ENT+1               ; indice = (ENT-SBUF)/32
+004544  1  38                   sec
+004545  1  E9 88                sbc #>SBUF
+004547  1  4A                   lsr
+004548  1  A5 08                lda ENT
+00454A  1  6A                   ror
+00454B  1  4A                   lsr
+00454C  1  4A                   lsr
+00454D  1  4A                   lsr
+00454E  1  4A                   lsr
+00454F  1  0D 80 8C             ora ISFOLD              ; v6: bit 7 = pasta
+004552  1  91 FE                sta (LP),y              ; LP+23
+004554  1  EE 4C 8C             inc NIMG
+004557  1  60           @x:     rts
+004558  1  14 15 1A 1B  rawofs: .byte 20,21,26,27,28,29,30,31
+00455C  1  1C 1D 1E 1F  
+004560  1               
+004560  1               ; scanall: lista a raiz dos dois cartoes (fsinit do mestre ja feito) e ordena
+004560  1  9C 70 8C     scanall: stz DEVB
+004563  1  20 EF 41             jsr fsinit
+004566  1               scanall2:
+004566  1  9C 7F 8C             stz USESTCL
+004569  1  9C 7E 8C             stz INSUB
+00456C  1  20 50 43             jsr scan
+00456F  1  A2 03                ldx #3
+004571  1  BD 72 8C     @ms:    lda VSER,x
+004574  1  9D 76 8C             sta MSER,x
+004577  1  CA                   dex
+004578  1  10 F7                bpl @ms
+00457A  1  A2 00                ldx #0                  ; guarda os parametros do mestre
+00457C  1  20 6B 46             jsr savefs
+00457F  1  9C 71 8C             stz HASSL
+004582  1  20 C1 46             jsr probesl
+004585  1  B0 24                bcs @nosl
+004587  1  A9 10                lda #$10
+004589  1  8D 70 8C             sta DEVB
+00458C  1  20 EF 41             jsr fsinit
+00458F  1  B0 1A                bcs @nosl
+004591  1  A2 03                ldx #3                  ; mesmo numero de serie = o mesmo cartao respondendo como escravo
+004593  1  BD 72 8C     @cs:    lda VSER,x
+004596  1  DD 76 8C             cmp MSER,x
+004599  1  D0 05                bne @sl
+00459B  1  CA                   dex
+00459C  1  10 F5                bpl @cs
+00459E  1  80 0B                bra @nosl
+0045A0  1  20 53 43     @sl:    jsr scan2
+0045A3  1  A2 01                ldx #1
+0045A5  1  20 6B 46             jsr savefs
+0045A8  1  EE 71 8C             inc HASSL
+0045AB  1  9C 70 8C     @nosl:  stz DEVB
+0045AE  1  A9 00                lda #0
+0045B0  1  20 8E 46             jsr usefs
+0045B3  1  20 B7 45             jsr sortl
+0045B6  1  60                   rts
+0045B7  1               
+0045B7  1               ; sortl: ORDER = indices da lista em ordem alfabetica (pastas primeiro). Insercao.
+0045B7  1  A2 00        sortl:  ldx #0
+0045B9  1  EC 4C 8C     @i:     cpx NIMG
+0045BC  1  B0 07                bcs @s
+0045BE  1  8A                   txa
+0045BF  1  9D 00 71             sta ORDER,x
+0045C2  1  E8                   inx
+0045C3  1  80 F4                bra @i
+0045C5  1  A2 01        @s:     ldx #1
+0045C7  1  EC 4C 8C     @o:     cpx NIMG
+0045CA  1  B0 31                bcs @done
+0045CC  1  BD 00 71             lda ORDER,x
+0045CF  1  8D 82 8C             sta KEYI
+0045D2  1  DA                   phx
+0045D3  1  8A                   txa
+0045D4  1  A8                   tay
+0045D5  1  C0 00        @in:    cpy #0
+0045D7  1  F0 1A                beq @put
+0045D9  1  B9 FF 70             lda ORDER-1,y
+0045DC  1  8D 86 8C             sta CMPB
+0045DF  1  AD 82 8C             lda KEYI
+0045E2  1  8D 85 8C             sta CMPA
+0045E5  1  20 FE 45             jsr less
+0045E8  1  90 09                bcc @put
+0045EA  1  B9 FF 70             lda ORDER-1,y
+0045ED  1  99 00 71             sta ORDER,y
+0045F0  1  88                   dey
+0045F1  1  80 E2                bra @in
+0045F3  1  AD 82 8C     @put:   lda KEYI
+0045F6  1  99 00 71             sta ORDER,y
+0045F9  1  FA                   plx
+0045FA  1  E8                   inx
+0045FB  1  80 CA                bra @o
+0045FD  1  60           @done:  rts
+0045FE  1               
+0045FE  1               ; less: C=1 se a imagem CMPA vem antes da CMPB. Preserva Y.
+0045FE  1  5A           less:   phy
+0045FF  1  AD 85 8C             lda CMPA
+004602  1  20 56 46             jsr isfold
+004605  1  8D 83 8C             sta T1F
+004608  1  AD 86 8C             lda CMPB
+00460B  1  20 56 46             jsr isfold
+00460E  1  4D 83 8C             eor T1F
+004611  1  10 07                bpl @same
+004613  1  AD 83 8C             lda T1F
+004616  1  30 3B                bmi @lt                 ; A e pasta, B nao
+004618  1  80 36                bra @ge
+00461A  1  AD 85 8C     @same:  lda CMPA
+00461D  1  20 FF 46             jsr lfnptr
+004620  1  A5 EE                lda LN
+004622  1  85 E3                sta LA
+004624  1  A5 EF                lda LN+1
+004626  1  85 E4                sta LA+1
+004628  1  AD 86 8C             lda CMPB
+00462B  1  20 FF 46             jsr lfnptr
+00462E  1  A0 00                ldy #0
+004630  1  B1 E3        @c:     lda (LA),y
+004632  1  20 60 46             jsr upc
+004635  1  8D 84 8C             sta T2
+004638  1  B1 EE                lda (LN),y
+00463A  1  20 60 46             jsr upc
+00463D  1  CD 84 8C             cmp T2
+004640  1  D0 0C                bne @d
+004642  1  AD 84 8C             lda T2
+004645  1  F0 09                beq @ge                 ; iguais
+004647  1  C8                   iny
+004648  1  C0 1F                cpy #31
+00464A  1  D0 E4                bne @c
+00464C  1  80 02                bra @ge
+00464E  1  B0 03        @d:     bcs @lt                 ; caractere de B maior: A vem antes
+004650  1  7A           @ge:    ply
+004651  1  18                   clc
+004652  1  60                   rts
+004653  1  7A           @lt:    ply
+004654  1  38                   sec
+004655  1  60                   rts
+004656  1               ; isfold: A = indice -> A bit 7 = pasta (usa LP, Y)
+004656  1  20 E6 46     isfold: jsr lstptr
+004659  1  A0 17                ldy #23
+00465B  1  B1 FE                lda (LP),y
+00465D  1  29 80                and #$80
+00465F  1  60                   rts
+004660  1               ; upc: minuscula -> maiuscula
+004660  1  C9 61        upc:    cmp #'a'
+004662  1  90 06                bcc @x
+004664  1  C9 7B                cmp #'z'+1
+004666  1  B0 02                bcs @x
+004668  1  29 DF                and #$DF
+00466A  1  60           @x:     rts
+00466B  1               
+00466B  1               ; savefs: X=0 mestre / 1 escravo: copia os parametros da FAT (V+0..V+75 e ESZ) para VS0/VS1
+00466B  1  A0 4B        savefs: ldy #75
+00466D  1  B9 00 8C     @l:     lda V,y
+004670  1  E0 00                cpx #0
+004672  1  D0 05                bne @1
+004674  1  99 80 6F             sta VS0,y
+004677  1  80 03                bra @n
+004679  1  99 00 70     @1:     sta VS1,y
+00467C  1  88           @n:     dey
+00467D  1  10 EE                bpl @l
+00467F  1  AD 51 8C             lda ESZ
+004682  1  E0 00                cpx #0
+004684  1  D0 04                bne @2
+004686  1  8D CC 6F             sta VS0+76
+004689  1  60                   rts
+00468A  1  8D 4C 70     @2:     sta VS1+76
+00468D  1  60                   rts
+00468E  1               ; usefs: A=0 mestre / 1 escravo: restaura os parametros da FAT daquele cartao
+00468E  1  AA           usefs:  tax
+00468F  1  A0 4B                ldy #75
+004691  1  E0 00        @l:     cpx #0
+004693  1  D0 05                bne @1
+004695  1  B9 80 6F             lda VS0,y
+004698  1  80 03                bra @s
+00469A  1  B9 00 70     @1:     lda VS1,y
+00469D  1  99 00 8C     @s:     sta V,y
+0046A0  1  88                   dey
+0046A1  1  10 EE                bpl @l
+0046A3  1  AD CC 6F             lda VS0+76
+0046A6  1  E0 00                cpx #0
+0046A8  1  F0 03                beq @e
+0046AA  1  AD 4C 70             lda VS1+76
+0046AD  1  8D 51 8C     @e:     sta ESZ
+0046B0  1  9C 4B 8C             stz CVAL
+0046B3  1  60                   rts
+0046B4  1               ; entfs: usa os parametros do cartao da imagem (LP): bit 4 do byte 3 do LBA do diretorio (LP+22)
+0046B4  1  A0 16        entfs:  ldy #22
+0046B6  1  B1 FE                lda (LP),y
+0046B8  1  29 10                and #$10
+0046BA  1  F0 02                beq @m
+0046BC  1  A9 01                lda #1
+0046BE  1  4C 8E 46     @m:     jmp usefs
+0046C1  1               ; probesl: C=0 se ha cartao escravo (RDY e DSC ligados)
+0046C1  1  A9 F0        probesl: lda #$F0
+0046C3  1  8D FE C0             sta HEAD
+0046C6  1  A2 00                ldx #0
+0046C8  1  AD FF C0     @w:     lda STATUS
+0046CB  1  C9 FF                cmp #$FF
+0046CD  1  F0 09                beq @no
+0046CF  1  29 D0                and #$D0
+0046D1  1  C9 50                cmp #$50
+0046D3  1  F0 0A                beq @yes
+0046D5  1  CA                   dex
+0046D6  1  D0 F0                bne @w
+0046D8  1  A9 E0        @no:    lda #$E0
+0046DA  1  8D FE C0             sta HEAD
+0046DD  1  38                   sec
+0046DE  1  60                   rts
+0046DF  1  A9 E0        @yes:   lda #$E0
+0046E1  1  8D FE C0             sta HEAD
+0046E4  1  18                   clc
+0046E5  1  60                   rts
+0046E6  1               
+0046E6  1               ; LP = LST + A*24 (A < 64)
+0046E6  1  85 FC        lstptr: sta TMP
+0046E8  1  0A                   asl
+0046E9  1  65 FC                adc TMP                 ; A*3 (ate 189)
+0046EB  1  64 FF                stz LP+1
+0046ED  1  0A                   asl
+0046EE  1  26 FF                rol LP+1
+0046F0  1  0A                   asl
+0046F1  1  26 FF                rol LP+1
+0046F3  1  0A                   asl
+0046F4  1  26 FF                rol LP+1
+0046F6  1  85 FE                sta LP
+0046F8  1  A5 FF                lda LP+1
+0046FA  1  69 68                adc #>LST
+0046FC  1  85 FF                sta LP+1
+0046FE  1  60                   rts
+0046FF  1               
+0046FF  1               ; LN = LFNT + A*32
+0046FF  1  64 EF        lfnptr: stz LN+1
+004701  1  0A                   asl
+004702  1  26 EF                rol LN+1
+004704  1  0A                   asl
+004705  1  26 EF                rol LN+1
+004707  1  0A                   asl
+004708  1  26 EF                rol LN+1
+00470A  1  0A                   asl
+00470B  1  26 EF                rol LN+1
+00470D  1  0A                   asl
+00470E  1  26 EF                rol LN+1
+004710  1  85 EE                sta LN
+004712  1  A5 EF                lda LN+1
+004714  1  18                   clc
+004715  1  69 60                adc #>LFNT
+004717  1  85 EF                sta LN+1
+004719  1  60                   rts
+00471A  1               
+00471A  1               ; lfnset: confere a soma do nome curto (ENT) com a dos pedacos; copia LBUF para LFNT[NIMG] ou zera
+00471A  1  AD 4C 8C     lfnset: lda NIMG
+00471D  1  20 FF 46             jsr lfnptr
+004720  1  A9 00                lda #0
+004722  1  92 EE                sta (LN)
+004724  1  AD 69 8C             lda LFOK
+004727  1  F0 32                beq @syn
+004729  1  9C 6B 8C             stz CSUM
+00472C  1  A0 00                ldy #0
+00472E  1  AD 6B 8C     @s:     lda CSUM
+004731  1  4A                   lsr
+004732  1  90 02                bcc @s1
+004734  1  09 80                ora #$80
+004736  1  18           @s1:    clc
+004737  1  71 08                adc (ENT),y
+004739  1  8D 6B 8C             sta CSUM
+00473C  1  C8                   iny
+00473D  1  C0 0B                cpy #11
+00473F  1  D0 ED                bne @s
+004741  1  CD 6A 8C             cmp LSUM
+004744  1  D0 15                bne @syn
+004746  1  A0 1E                ldy #30
+004748  1  A9 00                lda #0
+00474A  1  91 EE                sta (LN),y
+00474C  1  C8                   iny
+00474D  1  91 EE                sta (LN),y
+00474F  1  88                   dey
+004750  1  88           @c:     dey
+004751  1  30 07                bmi @x
+004753  1  B9 00 6F             lda LBUF,y
+004756  1  91 EE                sta (LN),y
+004758  1  80 F6                bra @c
+00475A  1  60           @x:     rts
+00475B  1  64 FD        @syn:   stz CNT                 ; v6: sem nome longo: "NOME.EXT" a partir do nome 8.3
+00475D  1  A2 00                ldx #0
+00475F  1  8A           @a:     txa
+004760  1  A8                   tay
+004761  1  B1 08                lda (ENT),y
+004763  1  E0 08                cpx #8
+004765  1  D0 0B                bne @b
+004767  1  C9 20                cmp #' '
+004769  1  F0 13                beq @end
+00476B  1  48                   pha
+00476C  1  A9 2E                lda #'.'
+00476E  1  20 80 47             jsr @put
+004771  1  68                   pla
+004772  1  C9 20        @b:     cmp #' '
+004774  1  F0 03                beq @sk
+004776  1  20 80 47             jsr @put
+004779  1  E8           @sk:    inx
+00477A  1  E0 0B                cpx #11
+00477C  1  D0 E1                bne @a
+00477E  1  A9 00        @end:   lda #0
+004780  1  A4 FD        @put:   ldy CNT
+004782  1  91 EE                sta (LN),y
+004784  1  E6 FD                inc CNT
+004786  1  60                   rts
+004787  1               
+004787  1               ; vFCL e vFSZ a partir da entrada da lista (LP)
+004787  1  A0 0D        getfcl: ldy #13
+004789  1  B1 FE                lda (LP),y
+00478B  1  8D 2C 8C             sta V+vFCL
+00478E  1  C8                   iny
+00478F  1  B1 FE                lda (LP),y
+004791  1  8D 2D 8C             sta V+vFCL+1
+004794  1  9C 2E 8C             stz V+vFCL+2
+004797  1  9C 2F 8C             stz V+vFCL+3
+00479A  1  AD 47 8C             lda FTYP
+00479D  1  F0 0D                beq @s
+00479F  1  A0 0B                ldy #11
+0047A1  1  B1 FE                lda (LP),y
+0047A3  1  8D 2E 8C             sta V+vFCL+2
+0047A6  1  C8                   iny
+0047A7  1  B1 FE                lda (LP),y
+0047A9  1  8D 2F 8C             sta V+vFCL+3
+0047AC  1  A2 03        @s:     ldx #3
+0047AE  1  A0 12                ldy #18
+0047B0  1  B1 FE        @z:     lda (LP),y
+0047B2  1  9D 30 8C             sta V+vFSZ,x
+0047B5  1  88                   dey
+0047B6  1  CA                   dex
+0047B7  1  10 F7                bpl @z
+0047B9  1  60                   rts
+0047BA  1               
+0047BA  1               ; ============================================================================
+0047BA  1               ; contig: confere se a imagem (vFCL) e contigua. FRAG = 1 se nao. ESC interrompe (FRAG = 1)
+0047BA  1  9C 4D 8C     contig: stz FRAG
+0047BD  1  A2 20                ldx #vCLUS
+0047BF  1  A0 2C                ldy #vFCL
+0047C1  1  20 9B 55             jsr cpy32
+0047C4  1  AD 00 C0     @slow:  lda KBD
+0047C7  1  C9 9B                cmp #$9B
+0047C9  1  D0 05                bne @s1
+0047CB  1  8D 10 C0             sta KBDSTRB
+0047CE  1  80 16                bra @bad
+0047D0  1  20 96 54     @s1:    jsr fatnext
+0047D3  1  B0 16                bcs @end
+0047D5  1  A2 38                ldx #vT2
+0047D7  1  A0 20                ldy #vCLUS
+0047D9  1  20 9B 55             jsr cpy32
+0047DC  1  20 DA 55             jsr inc32
+0047DF  1  A0 3C                ldy #vNXT
+0047E1  1  20 16 56             jsr cmp32
+0047E4  1  F0 06                beq @tofast
+0047E6  1  A9 01        @bad:   lda #1
+0047E8  1  8D 4D 8C             sta FRAG
+0047EB  1  60           @end:   rts
+0047EC  1  A2 38        @tofast: ldx #vT2
+0047EE  1  A0 3C                ldy #vNXT
+0047F0  1  20 9B 55             jsr cpy32
+0047F3  1  20 DA 55             jsr inc32
+0047F6  1  18           @fast:  clc
+0047F7  1  A5 06                lda PTR
+0047F9  1  6D 51 8C             adc ESZ
+0047FC  1  85 06                sta PTR
+0047FE  1  90 08                bcc @f1
+004800  1  E6 07                inc PTR+1
+004802  1  A5 07                lda PTR+1
+004804  1  C9 8C                cmp #>(FATB+512)
+004806  1  F0 2F                beq @tosl
+004808  1  A0 00        @f1:    ldy #0
+00480A  1  B1 06                lda (PTR),y
+00480C  1  CD 38 8C             cmp V+vT2
+00480F  1  D0 26                bne @tosl
+004811  1  C8                   iny
+004812  1  B1 06                lda (PTR),y
+004814  1  CD 39 8C             cmp V+vT2+1
+004817  1  D0 1E                bne @tosl
+004819  1  AD 47 8C             lda FTYP
+00481C  1  F0 12                beq @m
+00481E  1  C8                   iny
+00481F  1  B1 06                lda (PTR),y
+004821  1  CD 3A 8C             cmp V+vT2+2
+004824  1  D0 11                bne @tosl
+004826  1  C8                   iny
+004827  1  B1 06                lda (PTR),y
+004829  1  29 0F                and #$0F
+00482B  1  CD 3B 8C             cmp V+vT2+3
+00482E  1  D0 07                bne @tosl
+004830  1  A2 38        @m:     ldx #vT2
+004832  1  20 DA 55             jsr inc32
+004835  1  80 BF                bra @fast
+004837  1  A2 20        @tosl:  ldx #vCLUS
+004839  1  A0 38                ldy #vT2
+00483B  1  20 9B 55             jsr cpy32
+00483E  1  20 ED 55             jsr dec32
+004841  1  80 81                bra @slow
+004843  1               
+004843  1               ; ============================================================================
+004843  1               ; loadcfg: NEWCFG <- tabela da ROM (banco 4) se valida; NEWNAM <- nomes gravados se validos
+004843  1  A2 60        loadcfg: ldx #CFGLEN-1
+004845  1  AD E0 CE             lda ROMCFG+$60
+004848  1  C9 43                cmp #'C'
+00484A  1  F0 08                beq @c
+00484C  1  9E 00 6E     @z:     stz NEWCFG,x
+00484F  1  CA                   dex
+004850  1  10 FA                bpl @z
+004852  1  80 09                bra @n
+004854  1  BD 80 CE     @c:     lda ROMCFG,x
+004857  1  9D 00 6E             sta NEWCFG,x
+00485A  1  CA                   dex
+00485B  1  10 F7                bpl @c
+00485D  1  AD F4 C0     @n:     lda BK0                 ; nomes ficam no banco 0
+004860  1  A2 32                ldx #NAMLEN-1
+004862  1  AD EC CE             lda ROMNAM+44
+004865  1  C9 4E                cmp #'N'
+004867  1  F0 12                beq @k
+004869  1  A9 20                lda #' '
+00486B  1  9D 80 6E     @b:     sta NEWNAM,x
+00486E  1  CA                   dex
+00486F  1  10 FA                bpl @b
+004871  1  A9 03                lda #3                  ; v8: padrao = 3 s, boot pelo drive 1
+004873  1  8D B1 6E             sta TMOUT
+004876  1  9C B2 6E             stz BOOTD
+004879  1  80 1F                bra @f
+00487B  1  BD C0 CE     @k:     lda ROMNAM,x
+00487E  1  9D 80 6E             sta NEWNAM,x
+004881  1  CA                   dex
+004882  1  10 F7                bpl @k
+004884  1  AD B1 6E             lda TMOUT               ; v8: $FF (EEPROM gravada pelo menu v7) ou fora da faixa: padrao
+004887  1  C9 1F                cmp #31
+004889  1  90 05                bcc @k2
+00488B  1  A9 03                lda #3
+00488D  1  8D B1 6E             sta TMOUT
+004890  1  AD B2 6E     @k2:    lda BOOTD
+004893  1  C9 02                cmp #2
+004895  1  90 03                bcc @f
+004897  1  9C B2 6E             stz BOOTD
+00489A  1  A2 03        @f:     ldx #3                  ; v5: cartao dos drives ($FF = nome gravado pelo menu antigo -> mestre)
+00489C  1  BD AD 6E     @d:     lda NEWNAM+45,x
+00489F  1  29 10                and #$10
+0048A1  1  DD AD 6E             cmp NEWNAM+45,x
+0048A4  1  F0 03                beq @d1
+0048A6  1  9E AD 6E             stz NEWNAM+45,x
+0048A9  1  CA           @d1:    dex
+0048AA  1  10 F0                bpl @d
+0048AC  1  AD F5 C0             lda BK4
+0048AF  1  60                   rts
+0048B0  1               
+0048B0  1               ; cpptr: CP = NEWCFG + DRV*24
+0048B0  1  AD 53 8C     cpptr:  lda DRV
+0048B3  1  85 FC                sta TMP
+0048B5  1  0A                   asl
+0048B6  1  65 FC                adc TMP
+0048B8  1  0A                   asl
+0048B9  1  0A                   asl
+0048BA  1  0A                   asl
+0048BB  1  69 00                adc #<NEWCFG
+0048BD  1  85 EB                sta CP
+0048BF  1  A9 6E                lda #>NEWCFG
+0048C1  1  69 00                adc #0
+0048C3  1  85 EC                sta CP+1
+0048C5  1  60                   rts
+0048C6  1               
+0048C6  1               ; nmofs: Y = DRV*11 (deslocamento em NEWNAM)
+0048C6  1  AD 53 8C     nmofs:  lda DRV
+0048C9  1  0A                   asl
+0048CA  1  85 FC                sta TMP
+0048CC  1  0A                   asl
+0048CD  1  0A                   asl
+0048CE  1  65 FC                adc TMP
+0048D0  1  6D 53 8C             adc DRV
+0048D3  1  A8                   tay
+0048D4  1  60                   rts
+0048D5  1               
+0048D5  1               ; resolve: para cada drive com nome guardado, acha a imagem e refaz a entrada da tabela
+0048D5  1  9C 53 8C     resolve: stz DRV
+0048D8  1  20 B0 48     @d:     jsr cpptr
+0048DB  1  20 C6 48             jsr nmofs
+0048DE  1  B9 80 6E             lda NEWNAM,y
+0048E1  1  C9 20                cmp #' '
+0048E3  1  F0 43                beq @off
+0048E5  1  B2 EB                lda (CP)                ; v6: montada antes? a entrada de diretorio gravada continua igual?
+0048E7  1  10 05                bpl @fnd
+0048E9  1  20 37 49             jsr chkdir
+0048EC  1  90 3E                bcc @nx                 ; sim (vale tambem para imagens em subpastas)
+0048EE  1  20 97 49     @fnd:   jsr find                ; A = indice na lista ou C=1
+0048F1  1  B0 35                bcs @off
+0048F3  1  20 E6 46             jsr lstptr
+0048F6  1  20 B4 46             jsr entfs               ; v5: parametros da FAT do cartao da imagem
+0048F9  1  A0 17                ldy #23                 ; guarda a entrada atual
+0048FB  1  B1 EB        @o:     lda (CP),y
+0048FD  1  99 C0 6E             sta OLD,y
+004900  1  88                   dey
+004901  1  10 F8                bpl @o
+004903  1  20 D8 49             jsr mkcfg               ; refaz (sem conferir contiguidade)
+004906  1  AD C0 6E             lda OLD                 ; v5: mantem a protecao contra escrita
+004909  1  29 40                and #$40
+00490B  1  12 EB                ora (CP)
+00490D  1  92 EB                sta (CP)
+00490F  1  A0 13                ldy #19
+004911  1  B1 EB        @cmp:   lda (CP),y
+004913  1  D9 C0 6E             cmp OLD,y
+004916  1  D0 05                bne @chg
+004918  1  88                   dey
+004919  1  10 F6                bpl @cmp
+00491B  1  80 0F                bra @nx                 ; igual ao que ja estava montado e conferido
+00491D  1  20 87 47     @chg:   jsr getfcl              ; mudou: confere a contiguidade de novo
+004920  1  20 BA 47             jsr contig
+004923  1  AD 4D 8C             lda FRAG
+004926  1  F0 04                beq @nx
+004928  1  A9 00        @off:   lda #0
+00492A  1  92 EB                sta (CP)
+00492C  1  EE 53 8C     @nx:    inc DRV
+00492F  1  AD 53 8C             lda DRV
+004932  1  C9 04                cmp #4
+004934  1  D0 A2                bne @d
+004936  1  60                   rts
+004937  1               
+004937  1               ; chkdir: le o setor de diretorio da tabela (CP) e confere nome, cluster e tamanho da entrada.
+004937  1               ;   C=0 se tudo igual. Usa SBUF.
+004937  1  A0 07        chkdir: ldy #7
+004939  1  A2 00                ldx #0
+00493B  1  B1 EB        @l:     lda (CP),y
+00493D  1  9D 00 8C             sta V+vLBA,x
+004940  1  C8                   iny
+004941  1  E8                   inx
+004942  1  E0 04                cpx #4
+004944  1  D0 F5                bne @l
+004946  1  20 4D 56             jsr rdsec_s
+004949  1  B0 4A                bcs @no
+00494B  1  A0 0B                ldy #11                 ; ENT = SBUF + indice*32
+00494D  1  B1 EB                lda (CP),y
+00494F  1  29 0F                and #$0F
+004951  1  48                   pha
+004952  1  4A                   lsr
+004953  1  4A                   lsr
+004954  1  4A                   lsr
+004955  1  18                   clc
+004956  1  69 88                adc #>SBUF
+004958  1  85 09                sta ENT+1
+00495A  1  68                   pla
+00495B  1  29 07                and #7
+00495D  1  0A                   asl
+00495E  1  0A                   asl
+00495F  1  0A                   asl
+004960  1  0A                   asl
+004961  1  0A                   asl
+004962  1  85 08                sta ENT
+004964  1  20 C6 48             jsr nmofs
+004967  1  84 FC                sty TMP
+004969  1  A0 00                ldy #0
+00496B  1  5A           @n:     phy
+00496C  1  98                   tya
+00496D  1  18                   clc
+00496E  1  65 FC                adc TMP
+004970  1  A8                   tay
+004971  1  B9 80 6E             lda NEWNAM,y
+004974  1  7A                   ply
+004975  1  D1 08                cmp (ENT),y
+004977  1  D0 1C                bne @no
+004979  1  C8                   iny
+00497A  1  C0 0B                cpy #11
+00497C  1  D0 ED                bne @n
+00497E  1  A2 07                ldx #7                  ; bytes 20-21, 26-31 da entrada x tabela +12..+19
+004980  1  BC 58 45     @r:     ldy rawofs,x
+004983  1  B1 08                lda (ENT),y
+004985  1  48                   pha
+004986  1  8A                   txa
+004987  1  18                   clc
+004988  1  69 0C                adc #12
+00498A  1  A8                   tay
+00498B  1  68                   pla
+00498C  1  D1 EB                cmp (CP),y
+00498E  1  D0 05                bne @no
+004990  1  CA                   dex
+004991  1  10 ED                bpl @r
+004993  1  18                   clc
+004994  1  60                   rts
+004995  1  38           @no:    sec
+004996  1  60                   rts
+004997  1               
+004997  1               ; find: procura NEWNAM[DRV] na lista. C=0 e A = indice se achou
+004997  1  A2 00        find:   ldx #0
+004999  1  EC 4C 8C     @i:     cpx NIMG
+00499C  1  B0 38                bcs @no
+00499E  1  8A                   txa
+00499F  1  20 56 46             jsr isfold              ; v6: pastas nao contam
+0049A2  1  30 2F                bmi @nx
+0049A4  1  8A                   txa
+0049A5  1  20 E6 46             jsr lstptr
+0049A8  1  20 C6 48             jsr nmofs
+0049AB  1  84 FC                sty TMP
+0049AD  1  A0 00                ldy #0
+0049AF  1  5A           @c:     phy
+0049B0  1  98                   tya
+0049B1  1  18                   clc
+0049B2  1  65 FC                adc TMP
+0049B4  1  A8                   tay
+0049B5  1  B9 80 6E             lda NEWNAM,y
+0049B8  1  7A                   ply
+0049B9  1  D1 FE                cmp (LP),y
+0049BB  1  D0 16                bne @nx
+0049BD  1  C8                   iny
+0049BE  1  C0 0B                cpy #11
+0049C0  1  D0 ED                bne @c
+0049C2  1  A0 16                ldy #22                 ; v5: mesmo cartao?
+0049C4  1  B1 FE                lda (LP),y
+0049C6  1  29 10                and #$10
+0049C8  1  AC 53 8C             ldy DRV
+0049CB  1  D9 AD 6E             cmp NEWNAM+45,y
+0049CE  1  D0 03                bne @nx
+0049D0  1  8A                   txa
+0049D1  1  18                   clc
+0049D2  1  60                   rts
+0049D3  1  E8           @nx:    inx
+0049D4  1  80 C3                bra @i
+0049D6  1  38           @no:    sec
+0049D7  1  60                   rts
+0049D8  1               
+0049D8  1               ; mkcfg: monta a entrada (CP) da tabela a partir da imagem (LP)
+0049D8  1  20 87 47     mkcfg:  jsr getfcl
+0049DB  1  A9 80                lda #$80
+0049DD  1  92 EB                sta (CP)
+0049DF  1  A2 20                ldx #vCLUS
+0049E1  1  A0 2C                ldy #vFCL
+0049E3  1  20 9B 55             jsr cpy32
+0049E6  1  20 57 54             jsr c2l                 ; vLBA = inicio da imagem
+0049E9  1  A0 01                ldy #1
+0049EB  1  A2 00                ldx #0
+0049ED  1  BD 00 8C     @b:     lda V+vLBA,x
+0049F0  1  91 EB                sta (CP),y
+0049F2  1  C8                   iny
+0049F3  1  E8                   inx
+0049F4  1  E0 04                cpx #4
+0049F6  1  D0 F5                bne @b
+0049F8  1  AD 33 8C             lda V+vFSZ+3            ; blocos = tamanho/512, no maximo $FFFF
+0049FB  1  4A                   lsr
+0049FC  1  D0 13                bne @max
+0049FE  1  AD 32 8C             lda V+vFSZ+2
+004A01  1  6A                   ror
+004A02  1  85 FC                sta TMP
+004A04  1  AD 31 8C             lda V+vFSZ+1
+004A07  1  6A                   ror
+004A08  1  91 EB                sta (CP),y              ; +5
+004A0A  1  C8                   iny
+004A0B  1  A5 FC                lda TMP
+004A0D  1  91 EB                sta (CP),y              ; +6
+004A0F  1  80 07                bra @r
+004A11  1  A9 FF        @max:   lda #$FF
+004A13  1  91 EB                sta (CP),y
+004A15  1  C8                   iny
+004A16  1  91 EB                sta (CP),y
+004A18  1  A0 13        @r:     ldy #19                 ; LBA do dir -> +7..+10 ; indice -> +11 ; bytes 20-21, 26-31 -> +12..+19
+004A1A  1  B9 2E 4A     @m:     lda mkmap-7,y
+004A1D  1  5A                   phy
+004A1E  1  A8                   tay
+004A1F  1  B1 FE                lda (LP),y
+004A21  1  7A                   ply
+004A22  1  91 EB                sta (CP),y
+004A24  1  88                   dey
+004A25  1  C0 07                cpy #7
+004A27  1  B0 F1                bcs @m
+004A29  1  A0 17                ldy #23
+004A2B  1  A9 00                lda #0
+004A2D  1  91 EB        @z:     sta (CP),y
+004A2F  1  88                   dey
+004A30  1  C0 14                cpy #20
+004A32  1  B0 F9                bcs @z
+004A34  1  60                   rts
+004A35  1  13 14 15 16  mkmap:  .byte 19,20,21,22,23,11,12,13,14,15,16,17,18
+004A39  1  17 0B 0C 0D  
+004A3D  1  0E 0F 10 11  
+004A42  1               
+004A42  1               ; ============================================================================
+004A42  1               ; TELA (v2): escrita direta na memoria de video, molduras em video inverso (estilo Locksmith 6.0)
+004A42  1               ;   linha 0      titulo (inverso)
+004A42  1               ;   linhas 2-7   moldura de cima: os 4 drives
+004A42  1               ;   linhas 9-21  moldura de baixo: imagens do cartao (11 por pagina) com barra de selecao
+004A42  1               ;   linha 22     ajuda ; linha 23 mensagens
+004A42  1               BASCALC = $FBC1
+004A42  1               BASL    = $28
+004A42  1               CHP     = $24
+004A42  1               CVP     = $25
+004A42  1               LROW0   = 10                    ; primeira linha da lista
+004A42  1               LROWS   = 11                    ; linhas visiveis da lista
+004A42  1               NCOL    = 29                    ; caracteres do nome
+004A42  1               
+004A42  1               ; setpos: A = linha, X = coluna
+004A42  1  8E 5A 8C     setpos: stx SCOL
+004A45  1  4C C1 FB             jmp BASCALC
+004A48  1               
+004A48  1               ; putc: escreve A (ASCII) na posicao atual; INV <> 0 = inverso. Preserva X e Y.
+004A48  1  5A           putc:   phy
+004A49  1  AC 5A 8C             ldy SCOL
+004A4C  1  C0 28                cpy #40
+004A4E  1  B0 24                bcs @x
+004A50  1  29 7F                and #$7F
+004A52  1  2C 5B 8C             bit INV
+004A55  1  10 16                bpl @n
+004A57  1  C9 60                cmp #$60                ; inverso minusculo: com MouseText existe ($60-$7F no conjunto alternativo)
+004A59  1  90 0E                bcc @i
+004A5B  1  48                   pha
+004A5C  1  AD 87 8C             lda MT
+004A5F  1  D0 05                bne @lw
+004A61  1  68                   pla
+004A62  1  29 DF                and #$DF                ; sem MouseText: vira maiuscula
+004A64  1  80 03                bra @i
+004A66  1  68           @lw:    pla
+004A67  1  80 06                bra @w
+004A69  1  29 3F        @i:     and #$3F
+004A6B  1  80 02                bra @w
+004A6D  1  09 80        @n:     ora #$80
+004A6F  1  91 28        @w:     sta (BASL),y
+004A71  1  EE 5A 8C             inc SCOL
+004A74  1  7A           @x:     ply
+004A75  1  60                   rts
+004A76  1               
+004A76  1               ; puts: texto logo apos o JSR (termina em 0)
+004A76  1  68           puts:   pla
+004A77  1  85 FA                sta MP
+004A79  1  68                   pla
+004A7A  1  85 FB                sta MP+1
+004A7C  1  E6 FA        @m:     inc MP
+004A7E  1  D0 02                bne @m2
+004A80  1  E6 FB                inc MP+1
+004A82  1  B2 FA        @m2:    lda (MP)
+004A84  1  F0 05                beq @d
+004A86  1  20 48 4A             jsr putc
+004A89  1  80 F1                bra @m
+004A8B  1  A5 FB        @d:     lda MP+1
+004A8D  1  48                   pha
+004A8E  1  A5 FA                lda MP
+004A90  1  48                   pha
+004A91  1  60                   rts
+004A92  1               
+004A92  1               ; fillto: preenche com espacos (no modo INV atual) ate a coluna X
+004A92  1  EC 5A 8C     fillto: cpx SCOL
+004A95  1  F0 09                beq @x
+004A97  1  90 07                bcc @x
+004A99  1  A9 20                lda #' '
+004A9B  1  20 48 4A             jsr putc
+004A9E  1  80 F2                bra fillto
+004AA0  1  60           @x:     rts
+004AA1  1               
+004AA1  1               ; frame: linha A toda em inverso, com o texto (MP) na coluna 2 (usa puts antes? nao: chamado com texto inline)
+004AA1  1  8D 88 8C     border: sta BROW
+004AA4  1  A2 00                ldx #0
+004AA6  1  20 42 4A             jsr setpos
+004AA9  1  AD 87 8C             lda MT
+004AAC  1  F0 22                beq @inv
+004AAE  1  AD 88 8C             lda BROW
+004AB1  1  F0 1D                beq @inv                ; a linha 0 (titulo) continua em inverso
+004AB3  1  9C 5B 8C             stz INV
+004AB6  1  A9 20                lda #' '
+004AB8  1  20 48 4A             jsr putc
+004ABB  1  20 DD 4A             jsr isbot
+004ABE  1  F0 0D                beq @bot
+004AC0  1  A9 5F                lda #'_'                ; topo da moldura: sublinhado normal; titulo em inverso
+004AC2  1  20 48 4A             jsr putc
+004AC5  1  A9 FF                lda #$FF
+004AC7  1  8D 5B 8C             sta INV
+004ACA  1  4C 76 4A             jmp puts
+004ACD  1  4C 76 4A     @bot:   jmp puts                ; fundo: o endrow desenha a linha
+004AD0  1  A9 FF        @inv:   lda #$FF
+004AD2  1  8D 5B 8C             sta INV
+004AD5  1  A2 02                ldx #2
+004AD7  1  20 92 4A             jsr fillto
+004ADA  1  4C 76 4A             jmp puts                ; o texto inline vem do chamador (puts usa o retorno dele)
+004ADD  1               
+004ADD  1               ; isbot: Z=1 se BROW e linha de fundo de moldura
+004ADD  1  AD 88 8C     isbot:  lda BROW
+004AE0  1  C9 07                cmp #7
+004AE2  1  F0 02                beq @x
+004AE4  1  C9 15                cmp #LROW0+LROWS
+004AE6  1  60           @x:     rts
+004AE7  1               
+004AE7  1               ; endrow: termina a linha da moldura ate a coluna 40
+004AE7  1  AD 87 8C     endrow: lda MT
+004AEA  1  F0 2E                beq @inv
+004AEC  1  AD 88 8C             lda BROW
+004AEF  1  F0 29                beq @inv
+004AF1  1  9C 5B 8C             stz INV
+004AF4  1  20 DD 4A             jsr isbot
+004AF7  1  F0 0E                beq @bot
+004AF9  1  AE 5A 8C     @t:     ldx SCOL                ; topo: sublinhado ate a coluna 38
+004AFC  1  E0 27                cpx #39
+004AFE  1  B0 15                bcs @sp
+004B00  1  A9 5F                lda #'_'
+004B02  1  20 48 4A             jsr putc
+004B05  1  80 F2                bra @t
+004B07  1  AE 5A 8C     @bot:   ldx SCOL                ; fundo: MouseText $4C (linha no alto da celula)
+004B0A  1  E0 27                cpx #39
+004B0C  1  B0 07                bcs @sp
+004B0E  1  A9 4C                lda #$4C
+004B10  1  20 24 4B             jsr putr
+004B13  1  80 F2                bra @bot
+004B15  1  A9 20        @sp:    lda #' '
+004B17  1  4C 48 4A             jmp putc
+004B1A  1  A9 FF        @inv:   lda #$FF
+004B1C  1  8D 5B 8C             sta INV
+004B1F  1  A2 28                ldx #40
+004B21  1  4C 92 4A             jmp fillto
+004B24  1               
+004B24  1               ; putr: escreve o codigo de tela A sem conversao (MouseText)
+004B24  1  5A           putr:   phy
+004B25  1  AC 5A 8C             ldy SCOL
+004B28  1  91 28                sta (BASL),y
+004B2A  1  EE 5A 8C             inc SCOL
+004B2D  1  7A                   ply
+004B2E  1  60                   rts
+004B2F  1               
+004B2F  1               ; side: comeca uma linha interna: coluna 0 = borda, coluna 1 normal
+004B2F  1  A2 00        side:   ldx #0
+004B31  1  20 42 4A             jsr setpos
+004B34  1  AD 87 8C             lda MT
+004B37  1  F0 07                beq @inv
+004B39  1  A9 5A                lda #$5A                ; MouseText: linha no lado direito da celula
+004B3B  1  20 24 4B             jsr putr
+004B3E  1  80 0A                bra @n
+004B40  1  A9 FF        @inv:   lda #$FF
+004B42  1  8D 5B 8C             sta INV
+004B45  1  A9 20                lda #' '
+004B47  1  20 48 4A             jsr putc
+004B4A  1  9C 5B 8C     @n:     stz INV
+004B4D  1  A9 20                lda #' '
+004B4F  1  4C 48 4A             jmp putc
+004B52  1               
+004B52  1               ; closerow: completa a linha interna com espacos normais ate a coluna 39 e poe a borda
+004B52  1  9C 5B 8C     closerow: stz INV
+004B55  1  A2 27                ldx #39
+004B57  1  20 92 4A             jsr fillto
+004B5A  1  AD 87 8C             lda MT
+004B5D  1  F0 05                beq @inv
+004B5F  1  A9 5F                lda #$5F                ; MouseText: linha no lado esquerdo da celula
+004B61  1  4C 24 4B             jmp putr
+004B64  1  A9 FF        @inv:   lda #$FF
+004B66  1  8D 5B 8C             sta INV
+004B69  1  A9 20                lda #' '
+004B6B  1  4C 48 4A             jmp putc
+004B6E  1               
+004B6E  1               ; ----------------------------------------------------------------------------
+004B6E  1               ; nome da imagem A (indice na lista) na posicao atual, ate NCOL caracteres
+004B6E  1  48           pimg:   pha
+004B6F  1  20 FF 46             jsr lfnptr
+004B72  1  A9 1E                lda #30                 ; o nome vai no maximo ate a coluna 29 (30 = marca E)
+004B74  1  8D 5C 8C             sta LIM
+004B77  1  A0 00                ldy #0
+004B79  1  B2 EE                lda (LN)
+004B7B  1  F0 0E                beq @short
+004B7D  1  B1 EE        @l:     lda (LN),y
+004B7F  1  F0 08                beq @f
+004B81  1  20 AF 4B             jsr putl
+004B84  1  C8                   iny
+004B85  1  C0 1F                cpy #31
+004B87  1  D0 F4                bne @l
+004B89  1  68           @f:     pla
+004B8A  1  60                   rts
+004B8B  1  68           @short: pla
+004B8C  1  20 E6 46             jsr lstptr
+004B8F  1  A0 00                ldy #0
+004B91  1  B1 FE        @s:     lda (LP),y
+004B93  1  C9 20                cmp #' '
+004B95  1  F0 03                beq @sk
+004B97  1  20 AF 4B             jsr putl
+004B9A  1  C8           @sk:    iny
+004B9B  1  C0 08                cpy #8
+004B9D  1  D0 0B                bne @s2
+004B9F  1  B1 FE                lda (LP),y              ; extensao comeca: ponto (se houver extensao)
+004BA1  1  C9 20                cmp #' '
+004BA3  1  F0 09                beq @s3
+004BA5  1  A9 2E                lda #'.'
+004BA7  1  20 AF 4B             jsr putl
+004BAA  1  C0 0B        @s2:    cpy #11
+004BAC  1  D0 E3                bne @s
+004BAE  1  60           @s3:    rts
+004BAF  1               ; putl: putc limitado a LIM
+004BAF  1  48           putl:   pha
+004BB0  1  AD 5A 8C             lda SCOL
+004BB3  1  CD 5C 8C             cmp LIM
+004BB6  1  68                   pla
+004BB7  1  B0 03                bcs @x
+004BB9  1  4C 48 4A             jmp putc
+004BBC  1  60           @x:     rts
+004BBD  1               
+004BBD  1               ; tamanho da imagem A em KB, 6 colunas ("32767K")
+004BBD  1  20 E6 46     psize:  jsr lstptr
+004BC0  1  A0 12                ldy #18                 ; blocos = tamanho/512 (max $FFFF); KB = blocos/2
+004BC2  1  B1 FE                lda (LP),y
+004BC4  1  4A                   lsr
+004BC5  1  D0 10                bne @max
+004BC7  1  88                   dey
+004BC8  1  B1 FE                lda (LP),y
+004BCA  1  6A                   ror
+004BCB  1  8D 5E 8C             sta NUM+1
+004BCE  1  88                   dey
+004BCF  1  B1 FE                lda (LP),y
+004BD1  1  6A                   ror
+004BD2  1  8D 5D 8C             sta NUM
+004BD5  1  80 08                bra @kb
+004BD7  1  A9 FF        @max:   lda #$FF
+004BD9  1  8D 5D 8C             sta NUM
+004BDC  1  8D 5E 8C             sta NUM+1
+004BDF  1               @kb:
+004BDF  1  4E 5E 8C     pskb:   lsr NUM+1
+004BE2  1  6E 5D 8C             ror NUM
+004BE5  1  A2 04                ldx #4                  ; 5 digitos decimais
+004BE7  1  A9 00        @d:     lda #0                  ; NUM / 10 -> NUM, resto em A
+004BE9  1  A0 10                ldy #16
+004BEB  1  0E 5D 8C     @b:     asl NUM
+004BEE  1  2E 5E 8C             rol NUM+1
+004BF1  1  2A                   rol a
+004BF2  1  C9 0A                cmp #10
+004BF4  1  90 05                bcc @nb
+004BF6  1  E9 0A                sbc #10
+004BF8  1  EE 5D 8C             inc NUM
+004BFB  1  88           @nb:    dey
+004BFC  1  D0 ED                bne @b
+004BFE  1  09 30                ora #'0'
+004C00  1  9D 5F 8C             sta DIG,x
+004C03  1  CA                   dex
+004C04  1  10 E1                bpl @d
+004C06  1  A2 00                ldx #0                  ; zeros a esquerda viram espacos
+004C08  1  BD 5F 8C     @z:     lda DIG,x
+004C0B  1  C9 30                cmp #'0'
+004C0D  1  D0 0A                bne @p
+004C0F  1  A9 20                lda #' '
+004C11  1  9D 5F 8C             sta DIG,x
+004C14  1  E8                   inx
+004C15  1  E0 04                cpx #4
+004C17  1  D0 EF                bne @z
+004C19  1  A2 00        @p:     ldx #0
+004C1B  1  BD 5F 8C     @o:     lda DIG,x
+004C1E  1  20 48 4A             jsr putc
+004C21  1  E8                   inx
+004C22  1  E0 05                cpx #5
+004C24  1  D0 F5                bne @o
+004C26  1  A9 4B                lda #'K'
+004C28  1  4C 48 4A             jmp putc
+004C2B  1               
+004C2B  1               ; ----------------------------------------------------------------------------
+004C2B  1               ; draw: redesenha a tela inteira
+004C2B  1               ; cls: apaga a tela (so ao abrir o menu)
+004C2B  1  AD 87 8C     cls:    lda MT                  ; v7: liga o conjunto alternativo (MouseText)
+004C2E  1  F0 03                beq @c0
+004C30  1  8D 0F C0             sta SETALT
+004C33  1  A2 17        @c0:    ldx #23
+004C35  1  DA           @cl:    phx
+004C36  1  8A                   txa
+004C37  1  A2 00                ldx #0
+004C39  1  20 42 4A             jsr setpos
+004C3C  1  9C 5B 8C             stz INV
+004C3F  1  A2 28                ldx #40
+004C41  1  20 92 4A             jsr fillto
+004C44  1  FA                   plx
+004C45  1  CA                   dex
+004C46  1  10 ED                bpl @cl
+004C48  1  60                   rts
+004C49  1               
+004C49  1               ; draw: redesenha tudo por cima (cada linha e escrita inteira: nada pisca)
+004C49  1  A9 00        draw:   lda #0                  ; titulo
+004C4B  1  20 A1 4A             jsr border
+004C4E  1  43 46 46 41          .byte "CFFA 1.5 MENU V8 - CARTAO FAT",0
+004C52  1  20 31 2E 35  
+004C56  1  20 4D 45 4E  
+004C6C  1  AD C7 6F             lda VS0+71              ; tipo de FAT do cartao principal (FTYP = V+71)
+004C6F  1  F0 08                beq @t16
+004C71  1  20 76 4A             jsr puts
+004C74  1  33 32 00             .byte "32",0
+004C77  1  80 06                bra @t
+004C79  1  20 76 4A     @t16:   jsr puts
+004C7C  1  31 36 00             .byte "16",0
+004C7F  1  20 E7 4A     @t:     jsr endrow
+004C82  1  A9 02                lda #2                  ; moldura de cima
+004C84  1  20 A1 4A             jsr border
+004C87  1  20 44 52 49          .byte " DRIVES ",0
+004C8B  1  56 45 53 20  
+004C8F  1  00           
+004C90  1  20 E7 4A             jsr endrow
+004C93  1  9C 53 8C             stz DRV
+004C96  1  AD 53 8C     @dr:    lda DRV
+004C99  1  18                   clc
+004C9A  1  69 03                adc #3
+004C9C  1  20 2F 4B             jsr side
+004C9F  1  AD 53 8C             lda DRV
+004CA2  1  18                   clc
+004CA3  1  69 31                adc #'1'
+004CA5  1  20 48 4A             jsr putc
+004CA8  1  20 B0 48             jsr cpptr               ; v5: P = protegido contra escrita
+004CAB  1  B2 EB                lda (CP)
+004CAD  1  29 C0                and #$C0
+004CAF  1  C9 C0                cmp #$C0
+004CB1  1  A9 20                lda #' '
+004CB3  1  90 02                bcc @np
+004CB5  1  A9 50                lda #'P'
+004CB7  1  20 48 4A     @np:    jsr putc
+004CBA  1  A9 20                lda #' '
+004CBC  1  20 48 4A             jsr putc
+004CBF  1  20 BD 4E             jsr pdrive
+004CC2  1  20 52 4B             jsr closerow
+004CC5  1  EE 53 8C             inc DRV
+004CC8  1  AD 53 8C             lda DRV
+004CCB  1  C9 04                cmp #4
+004CCD  1  D0 C7                bne @dr
+004CCF  1  A9 07                lda #7                  ; v8: ajustes do boot na moldura de baixo dos drives
+004CD1  1  20 A1 4A             jsr border
+004CD4  1  20 42 4F 4F          .byte " BOOT DRIVE ",0
+004CD8  1  54 20 44 52  
+004CDC  1  49 56 45 20  
+004CE1  1  AD B2 6E             lda BOOTD
+004CE4  1  18                   clc
+004CE5  1  69 31                adc #'1'
+004CE7  1  20 48 4A             jsr putc
+004CEA  1  20 76 4A             jsr puts
+004CED  1  20 5B 5E 42          .byte " [^B]  ESPERA ",0
+004CF1  1  5D 20 20 45  
+004CF5  1  53 50 45 52  
+004CFC  1  AD B1 6E             lda TMOUT
+004CFF  1  20 76 4F             jsr pdec2
+004D02  1  20 76 4A             jsr puts
+004D05  1  20 53 20 5B          .byte " S [+-] ",0
+004D09  1  2B 2D 5D 20  
+004D0D  1  00           
+004D0E  1  20 E7 4A             jsr endrow
+004D11  1  A9 09                lda #9                  ; moldura de baixo
+004D13  1  20 A1 4A             jsr border
+004D16  1  20 00                .byte " ",0
+004D18  1  AD 7E 8C             lda INSUB
+004D1B  1  F0 10                beq @tr
+004D1D  1  20 76 4A             jsr puts
+004D20  1  4E 41 20 50          .byte "NA PASTA: ",0
+004D24  1  41 53 54 41  
+004D28  1  3A 20 00     
+004D2B  1  80 17                bra @tn
+004D2D  1  20 76 4A     @tr:    jsr puts
+004D30  1  49 4D 41 47          .byte "IMAGENS NO CARTAO: ",0
+004D34  1  45 4E 53 20  
+004D38  1  4E 4F 20 43  
+004D44  1               @tn:
+004D44  1  AD 4C 8C             lda NIMG
+004D47  1  20 76 4F             jsr pdec2
+004D4A  1  20 76 4A             jsr puts
+004D4D  1  20 20 50 41          .byte "  PAGINA ",0
+004D51  1  47 49 4E 41  
+004D55  1  20 00        
+004D57  1  AD 66 8C             lda TOP                 ; pagina = TOP/11 + 1
+004D5A  1  A2 00                ldx #0
+004D5C  1  C9 0B        @pg:    cmp #LROWS
+004D5E  1  90 05                bcc @pg2
+004D60  1  E9 0B                sbc #LROWS
+004D62  1  E8                   inx
+004D63  1  80 F7                bra @pg
+004D65  1  8A           @pg2:   txa
+004D66  1  1A                   inc a
+004D67  1  20 76 4F             jsr pdec2
+004D6A  1  20 76 4A             jsr puts
+004D6D  1  20 44 45 20          .byte " DE ",0
+004D71  1  00           
+004D72  1  AD 64 8C             lda NIT                 ; paginas = (NIT+10)/11
+004D75  1  18                   clc
+004D76  1  69 0A                adc #LROWS-1
+004D78  1  A2 00                ldx #0
+004D7A  1  C9 0B        @pq:    cmp #LROWS
+004D7C  1  90 05                bcc @pq2
+004D7E  1  E9 0B                sbc #LROWS
+004D80  1  E8                   inx
+004D81  1  80 F7                bra @pq
+004D83  1  8A           @pq2:   txa
+004D84  1  20 76 4F             jsr pdec2
+004D87  1  A9 20                lda #' '
+004D89  1  20 48 4A             jsr putc
+004D8C  1  20 E7 4A             jsr endrow
+004D8F  1  9C 67 8C             stz ROW
+004D92  1  20 AB 4D     @ir:    jsr drow
+004D95  1  EE 67 8C             inc ROW
+004D98  1  AD 67 8C             lda ROW
+004D9B  1  C9 0B                cmp #LROWS
+004D9D  1  D0 F3                bne @ir
+004D9F  1  A9 15                lda #LROW0+LROWS
+004DA1  1  20 A1 4A             jsr border
+004DA4  1  00                   .byte 0
+004DA5  1  20 E7 4A             jsr endrow
+004DA8  1  4C 57 4E             jmp dmsg
+004DAB  1               
+004DAB  1               ; drow: desenha a linha ROW da lista (item TOP+ROW)
+004DAB  1  AD 67 8C     drow:   lda ROW
+004DAE  1  18                   clc
+004DAF  1  69 0A                adc #LROW0
+004DB1  1  20 2F 4B             jsr side
+004DB4  1  AD 67 8C             lda ROW
+004DB7  1  18                   clc
+004DB8  1  6D 66 8C             adc TOP
+004DBB  1  CD 64 8C             cmp NIT
+004DBE  1  90 03                bcc @in0
+004DC0  1  4C 54 4E             jmp @ie                 ; linha vazia
+004DC3  1  8D 68 8C     @in0:   sta ITEM
+004DC6  1  CD 65 8C             cmp CUR
+004DC9  1  D0 05                bne @in
+004DCB  1  A9 FF                lda #$FF                ; barra de selecao
+004DCD  1  8D 5B 8C             sta INV
+004DD0  1  AD 68 8C     @in:    lda ITEM
+004DD3  1  D0 20                bne @img
+004DD5  1  20 76 4A             jsr puts
+004DD8  1  28 4E 45 4E          .byte "(NENHUMA: ESVAZIA O DRIVE)",0
+004DDC  1  48 55 4D 41  
+004DE0  1  3A 20 45 53  
+004DF3  1  80 5A                bra @ie2
+004DF5  1  3A           @img:   dec a
+004DF6  1  AA                   tax
+004DF7  1  BD 00 71             lda ORDER,x             ; v6: indice na ordem alfabetica
+004DFA  1  48                   pha
+004DFB  1  20 56 46             jsr isfold
+004DFE  1  30 10                bmi @fd
+004E00  1  68                   pla
+004E01  1  48                   pha
+004E02  1  20 6E 4B             jsr pimg
+004E05  1  68                   pla
+004E06  1  48                   pha
+004E07  1  20 54 4F             jsr emark
+004E0A  1  68                   pla
+004E0B  1  20 BD 4B             jsr psize
+004E0E  1  80 3F                bra @ie2
+004E10  1  68           @fd:    pla                     ; pasta
+004E11  1  48                   pha
+004E12  1  20 FF 46             jsr lfnptr
+004E15  1  B2 EE                lda (LN)
+004E17  1  C9 2E                cmp #'.'
+004E19  1  D0 21                bne @fn
+004E1B  1  A0 01                ldy #1
+004E1D  1  B1 EE                lda (LN),y
+004E1F  1  C9 2E                cmp #'.'
+004E21  1  D0 19                bne @fn
+004E23  1  68                   pla
+004E24  1  20 76 4A             jsr puts
+004E27  1  2E 2E 20 28          .byte ".. (PASTA DE CIMA)",0
+004E2B  1  50 41 53 54  
+004E2F  1  41 20 44 45  
+004E3A  1  80 13                bra @ie2
+004E3C  1  68           @fn:    pla
+004E3D  1  20 6E 4B             jsr pimg
+004E40  1  A2 1F                ldx #31
+004E42  1  20 92 4A             jsr fillto
+004E45  1  20 76 4A             jsr puts
+004E48  1  20 50 41 53          .byte " PASTA",0
+004E4C  1  54 41 00     
+004E4F  1  A2 26        @ie2:   ldx #38
+004E51  1  20 92 4A             jsr fillto
+004E54  1  4C 52 4B     @ie:    jmp closerow
+004E57  1               
+004E57  1               ; dmsg: linhas 22 (ajuda) e 23 (mensagem)
+004E57  1               dmsg:
+004E57  1  A9 16                lda #22
+004E59  1  A2 00                ldx #0
+004E5B  1  20 42 4A             jsr setpos
+004E5E  1  9C 5B 8C             stz INV
+004E61  1  20 76 4A             jsr puts
+004E64  1  31 2D 34 3A          .byte "1-4:MONTA SHIFT 1-4:PROT RET:BOOT ESC",0
+004E68  1  4D 4F 4E 54  
+004E6C  1  41 20 53 48  
+004E8A  1  A2 28                ldx #40
+004E8C  1  20 92 4A             jsr fillto
+004E8F  1  A9 17                lda #23
+004E91  1  A2 00                ldx #0
+004E93  1  20 42 4A             jsr setpos
+004E96  1  A9 20                lda #' '
+004E98  1  20 48 4A             jsr putc
+004E9B  1  A0 00                ldy #0
+004E9D  1  AD 40 6F             lda MSG
+004EA0  1  D0 0B                bne @ms
+004EA2  1  B9 40 71     @vv:    lda VOLMSG,y            ; v6: sem mensagem: nome do volume da imagem marcada
+004EA5  1  F0 11                beq @mx
+004EA7  1  20 48 4A             jsr putc
+004EAA  1  C8                   iny
+004EAB  1  80 F5                bra @vv
+004EAD  1  B9 40 6F     @ms:    lda MSG,y               ; mensagem de estado
+004EB0  1  F0 06                beq @mx
+004EB2  1  20 48 4A             jsr putc
+004EB5  1  C8                   iny
+004EB6  1  80 F5                bra @ms
+004EB8  1  A2 28        @mx:    ldx #40                 ; apaga o resto da mensagem anterior
+004EBA  1  4C 92 4A             jmp fillto
+004EBD  1               
+004EBD  1               
+004EBD  1               ; pdrive: conteudo do drive DRV na moldura de cima
+004EBD  1  20 C6 48     pdrive: jsr nmofs
+004EC0  1  B9 80 6E             lda NEWNAM,y
+004EC3  1  C9 20                cmp #' '
+004EC5  1  D0 06                bne @has
+004EC7  1  20 76 4A             jsr puts
+004ECA  1  2D 00                .byte "-",0
+004ECC  1  60                   rts
+004ECD  1  20 97 49     @has:   jsr find
+004ED0  1  B0 1F                bcs @abs
+004ED2  1  48                   pha
+004ED3  1  20 6E 4B             jsr pimg
+004ED6  1  68                   pla
+004ED7  1  48                   pha
+004ED8  1  20 54 4F             jsr emark
+004EDB  1  20 B0 48             jsr cpptr
+004EDE  1  B2 EB                lda (CP)
+004EE0  1  10 04                bpl @fr
+004EE2  1  68                   pla
+004EE3  1  4C BD 4B             jmp psize
+004EE6  1  68           @fr:    pla
+004EE7  1  20 76 4A             jsr puts
+004EEA  1  46 52 41 47          .byte "FRAG.",0
+004EEE  1  2E 00        
+004EF0  1  60                   rts
+004EF1  1  20 C6 48     @abs:   jsr nmofs               ; nome 8.3 formatado
+004EF4  1  A2 00                ldx #0
+004EF6  1  B9 80 6E     @n:     lda NEWNAM,y
+004EF9  1  E0 08                cpx #8
+004EFB  1  D0 0B                bne @n1
+004EFD  1  C9 20                cmp #' '
+004EFF  1  F0 14                beq @n3
+004F01  1  48                   pha
+004F02  1  A9 2E                lda #'.'
+004F04  1  20 48 4A             jsr putc
+004F07  1  68                   pla
+004F08  1  C9 20        @n1:    cmp #' '
+004F0A  1  F0 03                beq @n2
+004F0C  1  20 48 4A             jsr putc
+004F0F  1  C8           @n2:    iny
+004F10  1  E8                   inx
+004F11  1  E0 0B                cpx #11
+004F13  1  D0 E1                bne @n
+004F15  1  20 B0 48     @n3:    jsr cpptr
+004F18  1  B2 EB                lda (CP)
+004F1A  1  30 11                bmi @mnt
+004F1C  1  A2 1F                ldx #31
+004F1E  1  20 92 4A             jsr fillto
+004F21  1  20 76 4A             jsr puts
+004F24  1  41 55 53 45          .byte "AUSENTE",0
+004F28  1  4E 54 45 00  
+004F2C  1  60                   rts
+004F2D  1  A2 1E        @mnt:   ldx #30                 ; v6: montada e conferida, mas em outra pasta: tamanho pela tabela
+004F2F  1  20 92 4A             jsr fillto
+004F32  1  AC 53 8C             ldy DRV
+004F35  1  B9 AD 6E             lda NEWNAM+45,y
+004F38  1  F0 05                beq @me
+004F3A  1  A9 45                lda #'E'
+004F3C  1  20 48 4A             jsr putc
+004F3F  1  A2 20        @me:    ldx #32
+004F41  1  20 92 4A             jsr fillto
+004F44  1  A0 05                ldy #5
+004F46  1  B1 EB                lda (CP),y
+004F48  1  8D 5D 8C             sta NUM
+004F4B  1  C8                   iny
+004F4C  1  B1 EB                lda (CP),y
+004F4E  1  8D 5E 8C             sta NUM+1
+004F51  1  4C DF 4B             jmp pskb
+004F54  1               
+004F54  1               ; emark: completa ate a coluna 31 e marca E se a imagem A estiver no cartao escravo
+004F54  1  20 E6 46     emark:  jsr lstptr
+004F57  1  A2 1E                ldx #30
+004F59  1  20 92 4A             jsr fillto
+004F5C  1  A0 16                ldy #22
+004F5E  1  B1 FE                lda (LP),y
+004F60  1  29 10                and #$10
+004F62  1  F0 0A                beq @m
+004F64  1  A9 45                lda #'E'
+004F66  1  20 48 4A             jsr putc
+004F69  1  A9 20                lda #' '
+004F6B  1  4C 48 4A             jmp putc
+004F6E  1  A9 20        @m:     lda #' '
+004F70  1  20 48 4A             jsr putc
+004F73  1  4C 48 4A             jmp putc
+004F76  1               
+004F76  1               ; pdec2: A (0-99) em decimal
+004F76  1  A2 00        pdec2:  ldx #0
+004F78  1  C9 0A        @t:     cmp #10
+004F7A  1  90 05                bcc @u
+004F7C  1  E9 0A                sbc #10
+004F7E  1  E8                   inx
+004F7F  1  80 F7                bra @t
+004F81  1  48           @u:     pha
+004F82  1  8A                   txa
+004F83  1  F0 05                beq @1
+004F85  1  09 30                ora #'0'
+004F87  1  20 48 4A             jsr putc
+004F8A  1  68           @1:     pla
+004F8B  1  09 30                ora #'0'
+004F8D  1  4C 48 4A             jmp putc
+004F90  1               
+004F90  1               ; setmsg: copia o texto inline para MSG (linha 23)
+004F90  1  68           setmsg: pla
+004F91  1  85 FA                sta MP
+004F93  1  68                   pla
+004F94  1  85 FB                sta MP+1
+004F96  1  A0 00                ldy #0
+004F98  1  E6 FA        @l:     inc MP
+004F9A  1  D0 02                bne @l2
+004F9C  1  E6 FB                inc MP+1
+004F9E  1  B2 FA        @l2:    lda (MP)
+004FA0  1  99 40 6F             sta MSG,y
+004FA3  1  F0 03                beq @d
+004FA5  1  C8                   iny
+004FA6  1  80 F0                bra @l
+004FA8  1  A5 FB        @d:     lda MP+1
+004FAA  1  48                   pha
+004FAB  1  A5 FA                lda MP
+004FAD  1  48                   pha
+004FAE  1  60                   rts
+004FAF  1               
+004FAF  1               ; key: RDKEY com o cursor escondido no canto da linha 23
+004FAF  1  A9 17        key:    lda #23
+004FB1  1  85 25                sta CVP
+004FB3  1  20 C1 FB             jsr BASCALC
+004FB6  1  A9 27                lda #39
+004FB8  1  85 24                sta CHP
+004FBA  1  20 0C FD             jsr RDKEY
+004FBD  1  29 7F                and #$7F
+004FBF  1  60                   rts
+004FC0  1               
+004FC0  1               ; ============================================================================
+004FC0  1               ; menu: C=1 se ESC
+004FC0  1  AD 4C 8C     menu:   lda NIMG
+004FC3  1  1A                   inc a
+004FC4  1  8D 64 8C             sta NIT                 ; itens = (nenhuma) + imagens
+004FC7  1  9C 65 8C             stz CUR
+004FCA  1  9C 66 8C             stz TOP
+004FCD  1  9C 40 6F             stz MSG
+004FD0  1  20 2B 4C             jsr cls
+004FD3  1  A9 01                lda #1
+004FD5  1  8D 6D 8C             sta FULL
+004FD8  1  A9 FF                lda #$FF
+004FDA  1  8D 81 8C             sta OCURV
+004FDD  1  20 92 53     @loop:  jsr fixtop
+004FE0  1  AD 65 8C             lda CUR                 ; v6: nome do volume quando a barra muda
+004FE3  1  CD 81 8C             cmp OCURV
+004FE6  1  F0 06                beq @nv
+004FE8  1  8D 81 8C             sta OCURV
+004FEB  1  20 F3 52             jsr volinfo
+004FEE  1               @nv:
+004FEE  1  AD 6D 8C             lda FULL
+004FF1  1  D0 27                bne @full
+004FF3  1  AD 66 8C             lda TOP
+004FF6  1  CD 6F 8C             cmp OTOP
+004FF9  1  D0 1F                bne @full
+004FFB  1  AD 6E 8C             lda OCUR                ; mesma pagina: so a linha que perde e a que ganha a barra
+004FFE  1  38                   sec
+004FFF  1  ED 66 8C             sbc TOP
+005002  1  8D 67 8C             sta ROW
+005005  1  20 AB 4D             jsr drow
+005008  1  AD 65 8C             lda CUR
+00500B  1  38                   sec
+00500C  1  ED 66 8C             sbc TOP
+00500F  1  8D 67 8C             sta ROW
+005012  1  20 AB 4D             jsr drow
+005015  1  20 57 4E             jsr dmsg
+005018  1  80 06                bra @key
+00501A  1  20 49 4C     @full:  jsr draw
+00501D  1  9C 6D 8C             stz FULL
+005020  1  AD 65 8C     @key:   lda CUR
+005023  1  8D 6E 8C             sta OCUR
+005026  1  AD 66 8C             lda TOP
+005029  1  8D 6F 8C             sta OTOP
+00502C  1  20 AF 4F             jsr key
+00502F  1  48                   pha
+005030  1  AD 40 6F             lda MSG                 ; havia mensagem: apagar com redesenho completo
+005033  1  F0 03                beq @nm
+005035  1  EE 6D 8C             inc FULL
+005038  1  68           @nm:    pla
+005039  1  9C 40 6F             stz MSG
+00503C  1  C9 0B                cmp #$0B                ; seta para cima
+00503E  1  D0 0E                bne @k1
+005040  1  AD 65 8C             lda CUR
+005043  1  D0 03                bne @u1
+005045  1  4C DD 4F             jmp @loop
+005048  1  CE 65 8C     @u1:    dec CUR
+00504B  1  4C DD 4F             jmp @loop
+00504E  1  C9 0A        @k1:    cmp #$0A                ; seta para baixo
+005050  1  D0 12                bne @k2
+005052  1  AD 65 8C             lda CUR
+005055  1  1A                   inc a
+005056  1  CD 64 8C             cmp NIT
+005059  1  90 03                bcc @d1
+00505B  1  4C DD 4F             jmp @loop
+00505E  1  8D 65 8C     @d1:    sta CUR
+005061  1  4C DD 4F             jmp @loop
+005064  1  C9 08        @k2:    cmp #$08                ; seta para a esquerda: pagina anterior
+005066  1  D0 1D                bne @k3
+005068  1  AD 65 8C             lda CUR
+00506B  1  38                   sec
+00506C  1  E9 0B                sbc #LROWS
+00506E  1  B0 02                bcs @k2b
+005070  1  A9 00                lda #0
+005072  1  8D 65 8C     @k2b:   sta CUR
+005075  1  AD 66 8C             lda TOP
+005078  1  38                   sec
+005079  1  E9 0B                sbc #LROWS
+00507B  1  B0 02                bcs @k2c
+00507D  1  A9 00                lda #0
+00507F  1  8D 66 8C     @k2c:   sta TOP
+005082  1  4C DD 4F             jmp @loop
+005085  1  C9 15        @k3:    cmp #$15                ; seta para a direita: proxima pagina
+005087  1  D0 26                bne @k4
+005089  1  AD 66 8C             lda TOP
+00508C  1  18                   clc
+00508D  1  69 0B                adc #LROWS
+00508F  1  CD 64 8C             cmp NIT
+005092  1  90 03                bcc @r1
+005094  1  4C DD 4F             jmp @loop
+005097  1  8D 66 8C     @r1:    sta TOP
+00509A  1  AD 65 8C             lda CUR
+00509D  1  18                   clc
+00509E  1  69 0B                adc #LROWS
+0050A0  1  CD 64 8C             cmp NIT
+0050A3  1  90 04                bcc @k3b
+0050A5  1  AD 64 8C             lda NIT
+0050A8  1  3A                   dec a
+0050A9  1  8D 65 8C     @k3b:   sta CUR
+0050AC  1  4C DD 4F             jmp @loop
+0050AF  1  C9 0D        @k4:    cmp #$0D
+0050B1  1  F0 03                beq @k4a
+0050B3  1  4C 3A 51             jmp @k5
+0050B6  1  AD 65 8C     @k4a:   lda CUR
+0050B9  1  F0 0D                beq @boot
+0050BB  1  3A                   dec a
+0050BC  1  AA                   tax
+0050BD  1  BD 00 71             lda ORDER,x
+0050C0  1  8D 54 8C             sta SEL
+0050C3  1  20 56 46             jsr isfold
+0050C6  1  30 02                bmi @dir
+0050C8  1  18           @boot:  clc
+0050C9  1  60                   rts
+0050CA  1  AD 54 8C     @dir:   lda SEL                 ; v6: entra na pasta (ou volta, se for "..")
+0050CD  1  20 E6 46             jsr lstptr
+0050D0  1  20 B4 46             jsr entfs
+0050D3  1  A0 0D                ldy #13                 ; cluster da pasta: baixo em +13/+14, alto em +11/+12
+0050D5  1  B1 FE                lda (LP),y
+0050D7  1  8D 7A 8C             sta V+vSTCL
+0050DA  1  C8                   iny
+0050DB  1  B1 FE                lda (LP),y
+0050DD  1  8D 7B 8C             sta V+vSTCL+1
+0050E0  1  9C 7C 8C             stz V+vSTCL+2
+0050E3  1  9C 7D 8C             stz V+vSTCL+3
+0050E6  1  AD 47 8C             lda FTYP
+0050E9  1  F0 0D                beq @d16
+0050EB  1  A0 0B                ldy #11
+0050ED  1  B1 FE                lda (LP),y
+0050EF  1  8D 7C 8C             sta V+vSTCL+2
+0050F2  1  C8                   iny
+0050F3  1  B1 FE                lda (LP),y
+0050F5  1  8D 7D 8C             sta V+vSTCL+3
+0050F8  1  AD 7A 8C     @d16:   lda V+vSTCL
+0050FB  1  0D 7B 8C             ora V+vSTCL+1
+0050FE  1  0D 7C 8C             ora V+vSTCL+2
+005101  1  0D 7D 8C             ora V+vSTCL+3
+005104  1  D0 05                bne @sub
+005106  1  20 60 45             jsr scanall             ; ".." da raiz: lista os dois cartoes de novo
+005109  1  80 14                bra @dn
+00510B  1  9C 4C 8C     @sub:   stz NIMG
+00510E  1  A9 01                lda #1
+005110  1  8D 7F 8C             sta USESTCL
+005113  1  8D 7E 8C             sta INSUB
+005116  1  20 53 43             jsr scan2
+005119  1  9C 7F 8C             stz USESTCL
+00511C  1  20 B7 45             jsr sortl
+00511F  1  AD 4C 8C     @dn:    lda NIMG
+005122  1  1A                   inc a
+005123  1  8D 64 8C             sta NIT
+005126  1  9C 65 8C             stz CUR
+005129  1  9C 66 8C             stz TOP
+00512C  1  A9 FF                lda #$FF
+00512E  1  8D 81 8C             sta OCURV
+005131  1  EE 6D 8C             inc FULL
+005134  1  20 2B 4C             jsr cls
+005137  1  4C DD 4F             jmp @loop
+00513A  1  C9 1B        @k5:    cmp #$1B
+00513C  1  D0 02                bne @k6
+00513E  1  38                   sec
+00513F  1  60                   rts
+005140  1  C9 02        @k6:    cmp #$02                ; v8: CTRL-B: boot pelo drive 1 ou pelo 2
+005142  1  D0 0E                bne @k6a
+005144  1  AD B2 6E             lda BOOTD
+005147  1  49 01                eor #1
+005149  1  8D B2 6E             sta BOOTD
+00514C  1  EE 6D 8C             inc FULL
+00514F  1  4C DD 4F             jmp @loop
+005152  1  C9 2B        @k6a:   cmp #'+'                ; v8: + ou = aumenta a espera, - ou _ diminui
+005154  1  F0 0E                beq @tup
+005156  1  C9 3D                cmp #'='
+005158  1  F0 0A                beq @tup
+00515A  1  C9 2D                cmp #'-'
+00515C  1  F0 19                beq @tdn
+00515E  1  C9 5F                cmp #'_'
+005160  1  F0 15                beq @tdn
+005162  1  80 2B                bra @k6b
+005164  1  A2 00        @tup:   ldx #0
+005166  1  BD E9 52     @tu:    lda tmotab,x            ; primeiro valor maior que o atual
+005169  1  CD B1 6E             cmp TMOUT
+00516C  1  F0 02                beq @tu1
+00516E  1  B0 16                bcs @tset
+005170  1  E8           @tu1:   inx
+005171  1  E0 0A                cpx #NTMO
+005173  1  D0 F1                bne @tu
+005175  1  80 12                bra @tz
+005177  1  A2 09        @tdn:   ldx #NTMO-1
+005179  1  BD E9 52     @td:    lda tmotab,x            ; ultimo valor menor que o atual
+00517C  1  CD B1 6E             cmp TMOUT
+00517F  1  90 05                bcc @tset
+005181  1  CA                   dex
+005182  1  10 F5                bpl @td
+005184  1  80 03                bra @tz
+005186  1  8D B1 6E     @tset:  sta TMOUT
+005189  1  EE 6D 8C     @tz:    inc FULL
+00518C  1  4C DD 4F             jmp @loop
+00518F  1  A2 04        @k6b:   ldx #4                  ; v6: SHIFT+1-4 (! @ " # $) protege/libera
+005191  1  DD E1 51     @sh:    cmp @shtab,x
+005194  1  F0 34                beq @prot
+005196  1  CA                   dex
+005197  1  10 F8                bpl @sh
+005199  1  20 60 46             jsr upc                 ; letra: pula para a primeira imagem com essa inicial
+00519C  1  C9 41                cmp #'A'
+00519E  1  90 4B                bcc @k7
+0051A0  1  C9 5B                cmp #'Z'+1
+0051A2  1  B0 47                bcs @k7
+0051A4  1  8D 84 8C             sta T2
+0051A7  1  A2 00                ldx #0
+0051A9  1  EC 4C 8C     @lf:    cpx NIMG
+0051AC  1  B0 19                bcs @lnf
+0051AE  1  DA                   phx
+0051AF  1  BD 00 71             lda ORDER,x
+0051B2  1  20 FF 46             jsr lfnptr
+0051B5  1  B2 EE                lda (LN)
+0051B7  1  20 60 46             jsr upc
+0051BA  1  FA                   plx
+0051BB  1  CD 84 8C             cmp T2
+0051BE  1  F0 03                beq @lok
+0051C0  1  E8                   inx
+0051C1  1  80 E6                bra @lf
+0051C3  1  E8           @lok:   inx
+0051C4  1  8E 65 8C             stx CUR
+0051C7  1  4C DD 4F     @lnf:   jmp @loop
+0051CA  1  BD E6 51     @prot:  lda @shdrv,x
+0051CD  1  8D 53 8C             sta DRV
+0051D0  1  20 B0 48             jsr cpptr
+0051D3  1  B2 EB                lda (CP)
+0051D5  1  10 04                bpl @p9                 ; so drive montado
+0051D7  1  49 40                eor #$40
+0051D9  1  92 EB                sta (CP)
+0051DB  1  EE 6D 8C     @p9:    inc FULL
+0051DE  1  4C DD 4F             jmp @loop
+0051E1  1  21 40 22 23  @shtab: .byte "!@",$22,"#$"
+0051E5  1  24           
+0051E6  1  00 01 01 02  @shdrv: .byte 0,1,1,2,3
+0051EA  1  03           
+0051EB  1  38           @k7:    sec
+0051EC  1  E9 31                sbc #'1'
+0051EE  1  C9 04                cmp #4
+0051F0  1  90 03                bcc @mnt
+0051F2  1  4C DD 4F             jmp @loop
+0051F5  1  8D 6C 8C     @mnt:   sta MDRV
+0051F8  1  8D 53 8C             sta DRV
+0051FB  1  20 B0 48             jsr cpptr
+0051FE  1  AD 65 8C             lda CUR
+005201  1  D0 1E                bne @img
+005203  1  EE 6D 8C             inc FULL
+005206  1  A9 00                lda #0                  ; (nenhuma): esvazia o drive
+005208  1  92 EB                sta (CP)
+00520A  1  AC 6C 8C             ldy MDRV
+00520D  1  99 AD 6E             sta NEWNAM+45,y
+005210  1  20 C6 48             jsr nmofs
+005213  1  A2 0B                ldx #11
+005215  1  A9 20                lda #' '
+005217  1  99 80 6E     @cs:    sta NEWNAM,y
+00521A  1  C8                   iny
+00521B  1  CA                   dex
+00521C  1  D0 F9                bne @cs
+00521E  1  4C DD 4F             jmp @loop
+005221  1  3A           @img:   dec a
+005222  1  AA                   tax
+005223  1  BD 00 71             lda ORDER,x
+005226  1  8D 54 8C             sta SEL
+005229  1  20 56 46             jsr isfold
+00522C  1  10 03                bpl @im2
+00522E  1  4C DD 4F             jmp @loop               ; pasta: nada a montar
+005231  1  EE 6D 8C     @im2:   inc FULL
+005234  1  20 90 4F             jsr setmsg
+005237  1  43 4F 4E 46          .byte "CONFERINDO A IMAGEM...",0
+00523B  1  45 52 49 4E  
+00523F  1  44 4F 20 41  
+00524E  1  20 49 4C             jsr draw
+005251  1  AD 6C 8C             lda MDRV
+005254  1  8D 53 8C             sta DRV
+005257  1  AD 54 8C             lda SEL
+00525A  1  20 E6 46             jsr lstptr
+00525D  1  20 B4 46             jsr entfs
+005260  1  20 87 47             jsr getfcl
+005263  1  20 BA 47             jsr contig
+005266  1  AD 4D 8C             lda FRAG
+005269  1  F0 3D                beq @ok
+00526B  1  20 90 4F             jsr setmsg
+00526E  1  49 4D 41 47          .byte "IMAGEM FRAGMENTADA: COPIE DE NOVO NUM CARTAO FORMATADO",0
+005272  1  45 4D 20 46  
+005276  1  52 41 47 4D  
+0052A5  1  4C DD 4F             jmp @loop
+0052A8  1  AD 6C 8C     @ok:    lda MDRV
+0052AB  1  8D 53 8C             sta DRV
+0052AE  1  20 B0 48             jsr cpptr
+0052B1  1  AD 54 8C             lda SEL
+0052B4  1  20 E6 46             jsr lstptr
+0052B7  1  20 D8 49             jsr mkcfg
+0052BA  1  20 C6 48             jsr nmofs
+0052BD  1  A2 00                ldx #0
+0052BF  1  5A           @cn:    phy
+0052C0  1  8A                   txa
+0052C1  1  A8                   tay
+0052C2  1  B1 FE                lda (LP),y
+0052C4  1  7A                   ply
+0052C5  1  99 80 6E             sta NEWNAM,y
+0052C8  1  C8                   iny
+0052C9  1  E8                   inx
+0052CA  1  E0 0B                cpx #11
+0052CC  1  D0 F1                bne @cn
+0052CE  1  A0 16                ldy #22                 ; v5: cartao da imagem
+0052D0  1  B1 FE                lda (LP),y
+0052D2  1  29 10                and #$10
+0052D4  1  AC 6C 8C             ldy MDRV
+0052D7  1  99 AD 6E             sta NEWNAM+45,y
+0052DA  1  20 90 4F             jsr setmsg
+0052DD  1  4D 4F 4E 54          .byte "MONTADA.",0
+0052E1  1  41 44 41 2E  
+0052E5  1  00           
+0052E6  1  4C DD 4F             jmp @loop
+0052E9  1               
+0052E9  1  00 01 02 03  tmotab: .byte 0,1,2,3,5,8,10,15,20,30   ; v8: tempos de espera (s)
+0052ED  1  05 08 0A 0F  
+0052F1  1  14 1E        
+0052F3  1               NTMO    = 10
+0052F3  1               
+0052F3  1               ; volinfo: VOLMSG = "VOLUME /NOME" lido do bloco 2 da imagem marcada (vazio se pasta ou sem ProDOS)
+0052F3  1  9C 40 71     volinfo: stz VOLMSG
+0052F6  1  AD 65 8C             lda CUR
+0052F9  1  F0 61                beq @x
+0052FB  1  3A                   dec a
+0052FC  1  AA                   tax
+0052FD  1  BD 00 71             lda ORDER,x
+005300  1  48                   pha
+005301  1  20 56 46             jsr isfold
+005304  1  30 57                bmi @xp
+005306  1  68                   pla
+005307  1  20 E6 46             jsr lstptr
+00530A  1  20 B4 46             jsr entfs
+00530D  1  20 87 47             jsr getfcl
+005310  1  A2 20                ldx #vCLUS
+005312  1  A0 2C                ldy #vFCL
+005314  1  20 9B 55             jsr cpy32
+005317  1  20 57 54             jsr c2l
+00531A  1  A2 00                ldx #vLBA
+00531C  1  20 DA 55             jsr inc32
+00531F  1  20 DA 55             jsr inc32
+005322  1  20 4D 56             jsr rdsec_s
+005325  1  B0 35                bcs @x
+005327  1  AD 00 88             lda SBUF                ; bloco 2 = diretorio do volume: anterior = 0, tipo $F
+00532A  1  0D 01 88             ora SBUF+1
+00532D  1  D0 30                bne @no
+00532F  1  AD 04 88             lda SBUF+4
+005332  1  29 F0                and #$F0
+005334  1  C9 F0                cmp #$F0
+005336  1  D0 27                bne @no
+005338  1  A0 00                ldy #0
+00533A  1  B9 6C 53     @c:     lda @t,y
+00533D  1  99 40 71             sta VOLMSG,y
+005340  1  F0 03                beq @nm
+005342  1  C8                   iny
+005343  1  80 F5                bra @c
+005345  1  AD 04 88     @nm:    lda SBUF+4
+005348  1  29 0F                and #$0F
+00534A  1  AA                   tax
+00534B  1  A0 00                ldy #0
+00534D  1  B9 05 88     @n:     lda SBUF+5,y
+005350  1  99 48 71             sta VOLMSG+8,y
+005353  1  C8                   iny
+005354  1  CA                   dex
+005355  1  D0 F6                bne @n
+005357  1  A9 00                lda #0
+005359  1  99 48 71             sta VOLMSG+8,y
+00535C  1  60           @x:     rts
+00535D  1  68           @xp:    pla
+00535E  1  60                   rts
+00535F  1  A0 00        @no:    ldy #0
+005361  1  B9 75 53     @c2:    lda @t2,y
+005364  1  99 40 71             sta VOLMSG,y
+005367  1  F0 F3                beq @x
+005369  1  C8                   iny
+00536A  1  80 F5                bra @c2
+00536C  1  56 4F 4C 55  @t:     .byte "VOLUME /",0
+005370  1  4D 45 20 2F  
+005374  1  00           
+005375  1  53 45 4D 20  @t2:    .byte "SEM VOLUME PRODOS NO BLOCO 2",0
+005379  1  56 4F 4C 55  
+00537D  1  4D 45 20 50  
+005392  1               
+005392  1               ; fixtop: mantem CUR visivel
+005392  1  AD 65 8C     fixtop: lda CUR
+005395  1  CD 66 8C             cmp TOP
+005398  1  B0 03                bcs @a
+00539A  1  8D 66 8C             sta TOP
+00539D  1  AD 66 8C     @a:     lda TOP
+0053A0  1  18                   clc
+0053A1  1  69 0B                adc #LROWS
+0053A3  1  CD 65 8C             cmp CUR
+0053A6  1  F0 02                beq @b
+0053A8  1  B0 09                bcs @x
+0053AA  1  AD 65 8C     @b:     lda CUR
+0053AD  1  38                   sec
+0053AE  1  E9 0A                sbc #LROWS-1
+0053B0  1  8D 66 8C             sta TOP
+0053B3  1  60           @x:     rts
+0053B4  1               
+0053B4  1               ; ============================================================================
+0053B4  1               ; save: grava na EEPROM so o que mudou (tabela no banco 4, nomes no banco 0)
+0053B4  1  A9 43        save:   lda #'C'
+0053B6  1  8D 60 6E             sta NEWCFG+$60
+0053B9  1  A9 4E                lda #'N'
+0053BB  1  8D AC 6E             sta NEWNAM+44
+0053BE  1  A9 00                lda #<NEWCFG
+0053C0  1  85 06                sta PTR
+0053C2  1  A9 6E                lda #>NEWCFG
+0053C4  1  85 07                sta PTR+1
+0053C6  1  A9 80                lda #<ROMCFG
+0053C8  1  85 08                sta ENT
+0053CA  1  A9 CE                lda #>ROMCFG
+0053CC  1  85 09                sta ENT+1
+0053CE  1  A9 61                lda #CFGLEN
+0053D0  1  85 FD                sta CNT
+0053D2  1  A9 04                lda #4
+0053D4  1  8D 55 8C             sta BANKS
+0053D7  1  20 F8 53             jsr eewr
+0053DA  1  A9 80                lda #<NEWNAM
+0053DC  1  85 06                sta PTR
+0053DE  1  A9 6E                lda #>NEWNAM
+0053E0  1  85 07                sta PTR+1
+0053E2  1  A9 C0                lda #<ROMNAM
+0053E4  1  85 08                sta ENT
+0053E6  1  A9 CE                lda #>ROMNAM
+0053E8  1  85 09                sta ENT+1
+0053EA  1  A9 33                lda #NAMLEN
+0053EC  1  85 FD                sta CNT
+0053EE  1  9C 55 8C             stz BANKS
+0053F1  1  20 F8 53             jsr eewr
+0053F4  1  9C 7F 04             stz DRVRST              ; o driver refaz o FatInit na proxima chamada
+0053F7  1  60                   rts
+0053F8  1               
+0053F8  1               ; eewr: copia CNT bytes de (PTR) para a EEPROM em (ENT), banco BANKS (0 ou 4); so os diferentes
+0053F8  1  20 E5 41     eewr:   jsr romon
+0053FB  1  A0 00                ldy #0
+0053FD  1  AD 55 8C     @l:     lda BANKS
+005400  1  F0 05                beq @b0
+005402  1  AD F5 C0             lda BK4
+005405  1  80 03                bra @b1
+005407  1  AD F4 C0     @b0:    lda BK0
+00540A  1  B1 06        @b1:    lda (PTR),y
+00540C  1  D1 08                cmp (ENT),y
+00540E  1  F0 1B                beq @nx
+005410  1  8D F3 C0             sta WUNL                ; destrava
+005413  1  91 08                sta (ENT),y             ; grava (a EEPROM leva ~3 ms)
+005415  1  A2 00                ldx #0
+005417  1  A9 08                lda #8
+005419  1  85 FC                sta TMP
+00541B  1  B1 08        @p:     lda (ENT),y             ; polling de dados: bit 7 invertido ate terminar
+00541D  1  D1 06                cmp (PTR),y
+00541F  1  F0 07                beq @d
+005421  1  CA                   dex
+005422  1  D0 F7                bne @p
+005424  1  C6 FC                dec TMP
+005426  1  D0 F3                bne @p
+005428  1  AD F3 C0     @d:     lda WUNL                ; trava
+00542B  1  C8           @nx:    iny
+00542C  1  C4 FD                cpy CNT
+00542E  1  D0 CD                bne @l
+005430  1  AD F5 C0             lda BK4
+005433  1  60                   rts
+005434  1               
+005434  1  AE 50 8C     ioerr:  ldx SAVSP
+005437  1  9A                   txs
+005438  1  20 D2 56             jsr msg
+00543B  1  43 46 46 41          .byte "CFFA: ERRO DE LEITURA",0
+00543F  1  3A 20 45 52  
+005443  1  52 4F 20 44  
+005451  1  20 8E FD             jsr CROUT
+005454  1  4C E5 41             jmp romon
+005457  1               
+005457  1               ; c2l: vLBA = DATAST + (vCLUS - 2) << SPSH
+005457  1  A2 1C        c2l:    ldx #vT1
+005459  1  A0 20                ldy #vCLUS
+00545B  1  20 9B 55             jsr cpy32
+00545E  1  38                   sec                     ; T1 = CLUS - 2 (sem CPY no meio: preserva o carry)
+00545F  1  AD 1C 8C             lda V+vT1
+005462  1  E9 02                sbc #2
+005464  1  8D 1C 8C             sta V+vT1
+005467  1  AD 1D 8C             lda V+vT1+1
+00546A  1  E9 00                sbc #0
+00546C  1  8D 1D 8C             sta V+vT1+1
+00546F  1  AD 1E 8C             lda V+vT1+2
+005472  1  E9 00                sbc #0
+005474  1  8D 1E 8C             sta V+vT1+2
+005477  1  AD 1F 8C             lda V+vT1+3
+00547A  1  E9 00                sbc #0
+00547C  1  8D 1F 8C             sta V+vT1+3
+00547F  1  AC 45 8C             ldy SPSH
+005482  1  F0 06                beq @a
+005484  1  20 09 56     @s:     jsr shl32
+005487  1  88                   dey
+005488  1  D0 FA                bne @s
+00548A  1  A2 00        @a:     ldx #vLBA
+00548C  1  A0 10                ldy #vDATAST
+00548E  1  20 9B 55             jsr cpy32
+005491  1  A0 1C                ldy #vT1
+005493  1  4C B4 55             jmp add32
+005496  1               
+005496  1               ; fatnext: vNXT = FAT[vCLUS]; C=1 se fim de cadeia (EOC), cluster livre ou invalido.
+005496  1               ; Em erro de leitura: sai pelo ioerr.
+005496  1               fatnext:
+005496  1                       ; T2 = indice do setor na FAT; PTR = FATB + deslocamento
+005496  1  A2 38                ldx #vT2
+005498  1  A0 20                ldy #vCLUS
+00549A  1  20 9B 55             jsr cpy32
+00549D  1  AD 47 8C             lda FTYP
+0054A0  1  D0 24                bne @f32
+0054A2  1                       ; FAT16: setor = CLUS>>8, desloc = (CLUS & $FF)*2
+0054A2  1  AD 39 8C             lda V+vT2+1
+0054A5  1  8D 38 8C             sta V+vT2
+0054A8  1  AD 3A 8C             lda V+vT2+2
+0054AB  1  8D 39 8C             sta V+vT2+1
+0054AE  1  AD 3B 8C             lda V+vT2+3
+0054B1  1  8D 3A 8C             sta V+vT2+2
+0054B4  1  9C 3B 8C             stz V+vT2+3
+0054B7  1  AD 20 8C             lda V+vCLUS
+0054BA  1  0A                   asl
+0054BB  1  8D 4E 8C             sta FOFS
+0054BE  1  A9 00                lda #0
+0054C0  1  2A                   rol
+0054C1  1  8D 4F 8C             sta FOFS+1
+0054C4  1  80 21                bra @rd
+0054C6  1               @f32:   ; FAT32: setor = CLUS>>7, desloc = (CLUS & $7F)*4
+0054C6  1  AD 20 8C             lda V+vCLUS
+0054C9  1  29 7F                and #$7F
+0054CB  1  0A                   asl
+0054CC  1  0A                   asl
+0054CD  1  8D 4E 8C             sta FOFS
+0054D0  1  A9 00                lda #0
+0054D2  1  2A                   rol
+0054D3  1  8D 4F 8C             sta FOFS+1
+0054D6  1  A0 07                ldy #7
+0054D8  1  4E 3B 8C     @sr:    lsr V+vT2+3
+0054DB  1  6E 3A 8C             ror V+vT2+2
+0054DE  1  6E 39 8C             ror V+vT2+1
+0054E1  1  6E 38 8C             ror V+vT2
+0054E4  1  88                   dey
+0054E5  1  D0 F1                bne @sr
+0054E7  1  A2 00        @rd:    ldx #vLBA
+0054E9  1  A0 08                ldy #vFATST
+0054EB  1  20 9B 55             jsr cpy32
+0054EE  1  A0 38                ldy #vT2
+0054F0  1  20 B4 55             jsr add32
+0054F3  1  AD 4B 8C             lda CVAL
+0054F6  1  F0 09                beq @load
+0054F8  1  A2 00                ldx #vLBA
+0054FA  1  A0 24                ldy #vFCACHE
+0054FC  1  20 16 56             jsr cmp32
+0054FF  1  F0 16                beq @have
+005501  1  A9 8A        @load:  lda #>FATB
+005503  1  20 4F 56             jsr rdsec
+005506  1  90 03                bcc @ld
+005508  1  4C 34 54             jmp ioerr
+00550B  1  A2 24        @ld:    ldx #vFCACHE
+00550D  1  A0 00                ldy #vLBA
+00550F  1  20 9B 55             jsr cpy32
+005512  1  A9 01                lda #1
+005514  1  8D 4B 8C             sta CVAL
+005517  1  AD 4E 8C     @have:  lda FOFS
+00551A  1  85 06                sta PTR
+00551C  1  A9 8A                lda #>FATB
+00551E  1  18                   clc
+00551F  1  6D 4F 8C             adc FOFS+1
+005522  1  85 07                sta PTR+1
+005524  1  A2 3C                ldx #vNXT
+005526  1  20 8E 55             jsr zero32
+005529  1  A0 00                ldy #0
+00552B  1  B1 06                lda (PTR),y
+00552D  1  8D 3C 8C             sta V+vNXT
+005530  1  C8                   iny
+005531  1  B1 06                lda (PTR),y
+005533  1  8D 3D 8C             sta V+vNXT+1
+005536  1  AD 47 8C             lda FTYP
+005539  1  D0 1C                bne @e32
+00553B  1                       ; FAT16: >= $FFF8 fim; < 2 invalido
+00553B  1  AD 3D 8C             lda V+vNXT+1
+00553E  1  C9 FF                cmp #$FF
+005540  1  D0 07                bne @lo16
+005542  1  AD 3C 8C             lda V+vNXT
+005545  1  C9 F8                cmp #$F8
+005547  1  B0 43                bcs @eoc
+005549  1  AD 3D 8C     @lo16:  lda V+vNXT+1
+00554C  1  D0 07                bne @ok
+00554E  1  AD 3C 8C             lda V+vNXT
+005551  1  C9 02                cmp #2
+005553  1  90 37                bcc @eoc
+005555  1  18           @ok:    clc
+005556  1  60                   rts
+005557  1  C8           @e32:   iny
+005558  1  B1 06                lda (PTR),y
+00555A  1  8D 3E 8C             sta V+vNXT+2
+00555D  1  C8                   iny
+00555E  1  B1 06                lda (PTR),y
+005560  1  29 0F                and #$0F
+005562  1  8D 3F 8C             sta V+vNXT+3
+005565  1  C9 0F                cmp #$0F
+005567  1  D0 11                bne @lo32
+005569  1  AD 3E 8C             lda V+vNXT+2
+00556C  1  2D 3D 8C             and V+vNXT+1
+00556F  1  C9 FF                cmp #$FF
+005571  1  D0 07                bne @lo32
+005573  1  AD 3C 8C             lda V+vNXT
+005576  1  C9 F8                cmp #$F8
+005578  1  B0 12                bcs @eoc
+00557A  1  AD 3F 8C     @lo32:  lda V+vNXT+3
+00557D  1  0D 3E 8C             ora V+vNXT+2
+005580  1  0D 3D 8C             ora V+vNXT+1
+005583  1  D0 D0                bne @ok
+005585  1  AD 3C 8C             lda V+vNXT
+005588  1  C9 02                cmp #2
+00558A  1  B0 C9                bcs @ok
+00558C  1  38           @eoc:   sec
+00558D  1  60                   rts
+00558E  1               
+00558E  1               ; ============================================================================
+00558E  1               ; aritmetica de 32 bits sobre V (X = destino, Y = origem; deslocamentos)
+00558E  1  9E 00 8C     zero32: stz V,x
+005591  1  9E 01 8C             stz V+1,x
+005594  1  9E 02 8C             stz V+2,x
+005597  1  9E 03 8C             stz V+3,x
+00559A  1  60                   rts
+00559B  1  B9 00 8C     cpy32:  lda V,y
+00559E  1  9D 00 8C             sta V,x
+0055A1  1  B9 01 8C             lda V+1,y
+0055A4  1  9D 01 8C             sta V+1,x
+0055A7  1  B9 02 8C             lda V+2,y
+0055AA  1  9D 02 8C             sta V+2,x
+0055AD  1  B9 03 8C             lda V+3,y
+0055B0  1  9D 03 8C             sta V+3,x
+0055B3  1  60                   rts
+0055B4  1  18           add32:  clc
+0055B5  1  BD 00 8C             lda V,x
+0055B8  1  79 00 8C             adc V,y
+0055BB  1  9D 00 8C             sta V,x
+0055BE  1  BD 01 8C             lda V+1,x
+0055C1  1  79 01 8C             adc V+1,y
+0055C4  1  9D 01 8C             sta V+1,x
+0055C7  1  BD 02 8C             lda V+2,x
+0055CA  1  79 02 8C             adc V+2,y
+0055CD  1  9D 02 8C             sta V+2,x
+0055D0  1  BD 03 8C             lda V+3,x
+0055D3  1  79 03 8C             adc V+3,y
+0055D6  1  9D 03 8C             sta V+3,x
+0055D9  1  60                   rts
+0055DA  1  FE 00 8C     inc32:  inc V,x
+0055DD  1  D0 0D                bne @r
+0055DF  1  FE 01 8C             inc V+1,x
+0055E2  1  D0 08                bne @r
+0055E4  1  FE 02 8C             inc V+2,x
+0055E7  1  D0 03                bne @r
+0055E9  1  FE 03 8C             inc V+3,x
+0055EC  1  60           @r:     rts
+0055ED  1  BD 00 8C     dec32:  lda V,x
+0055F0  1  D0 13                bne @a
+0055F2  1  BD 01 8C             lda V+1,x
+0055F5  1  D0 0B                bne @b
+0055F7  1  BD 02 8C             lda V+2,x
+0055FA  1  D0 03                bne @c
+0055FC  1  DE 03 8C             dec V+3,x
+0055FF  1  DE 02 8C     @c:     dec V+2,x
+005602  1  DE 01 8C     @b:     dec V+1,x
+005605  1  DE 00 8C     @a:     dec V,x
+005608  1  60                   rts
+005609  1  1E 00 8C     shl32:  asl V,x
+00560C  1  3E 01 8C             rol V+1,x
+00560F  1  3E 02 8C             rol V+2,x
+005612  1  3E 03 8C             rol V+3,x
+005615  1  60                   rts
+005616  1  BD 00 8C     cmp32:  lda V,x                 ; Z=1 se iguais
+005619  1  D9 00 8C             cmp V,y
+00561C  1  D0 16                bne @r
+00561E  1  BD 01 8C             lda V+1,x
+005621  1  D9 01 8C             cmp V+1,y
+005624  1  D0 0E                bne @r
+005626  1  BD 02 8C             lda V+2,x
+005629  1  D9 02 8C             cmp V+2,y
+00562C  1  D0 06                bne @r
+00562E  1  BD 03 8C             lda V+3,x
+005631  1  D9 03 8C             cmp V+3,y
+005634  1  60           @r:     rts
+005635  1  BD 03 8C     pr32:   lda V+3,x
+005638  1  20 DA FD             jsr PRBYTE
+00563B  1  BD 02 8C             lda V+2,x
+00563E  1  20 DA FD             jsr PRBYTE
+005641  1  BD 01 8C             lda V+1,x
+005644  1  20 DA FD             jsr PRBYTE
+005647  1  BD 00 8C             lda V,x
+00564A  1  4C DA FD             jmp PRBYTE
+00564D  1               
+00564D  1               
+00564D  1               ; leitura de setor (LBA 28 bits em vLBA) para o buffer de pagina A (512 bytes). C=1 = erro
+00564D  1  A9 88        rdsec_s: lda #>SBUF
+00564F  1  85 07        rdsec:  sta PTR+1
+005651  1  64 06                stz PTR
+005653  1  AD 03 8C             lda V+vLBA+3            ; v5: Head primeiro (bit 4 = escravo), depois espera o cartao
+005656  1  29 1F                and #$1F
+005658  1  09 E0                ora #$E0
+00565A  1  8D FE C0             sta HEAD
+00565D  1  20 AA 56             jsr waitrdy
+005660  1  B0 45                bcs @r
+005662  1  A9 01                lda #1
+005664  1  8D FA C0             sta SECCNT
+005667  1  AD 00 8C             lda V+vLBA
+00566A  1  8D FB C0             sta SECT
+00566D  1  AD 01 8C             lda V+vLBA+1
+005670  1  8D FC C0             sta CYL
+005673  1  AD 02 8C             lda V+vLBA+2
+005676  1  8D FD C0             sta CYLH
+005679  1  9C F0 C0             stz DATAH
+00567C  1  A9 20                lda #$20
+00567E  1  8D FF C0             sta CMD
+005681  1  20 AA 56             jsr waitrdy
+005684  1  B0 21                bcs @r
+005686  1  AD FF C0             lda STATUS
+005689  1  29 09                and #$09
+00568B  1  C9 08                cmp #$08
+00568D  1  D0 19                bne @e
+00568F  1  A2 02                ldx #2
+005691  1  A0 00                ldy #0
+005693  1  AD F8 C0     @l:     lda DATAL
+005696  1  91 06                sta (PTR),y
+005698  1  C8                   iny
+005699  1  AD F0 C0             lda DATAH
+00569C  1  91 06                sta (PTR),y
+00569E  1  C8                   iny
+00569F  1  D0 F2                bne @l
+0056A1  1  E6 07                inc PTR+1
+0056A3  1  CA                   dex
+0056A4  1  D0 ED                bne @l
+0056A6  1  18                   clc
+0056A7  1  60           @r:     rts
+0056A8  1  38           @e:     sec
+0056A9  1  60                   rts
+0056AA  1               
+0056AA  1               ; espera BSY=0 (maximo ~2 s)
+0056AA  1               waitrdy:
+0056AA  1  A2 00                ldx #0
+0056AC  1  A0 00                ldy #0
+0056AE  1  A9 08                lda #8
+0056B0  1  85 FC                sta TMP
+0056B2  1  AD FF C0     @w:     lda STATUS
+0056B5  1  10 0C                bpl @ok
+0056B7  1  88                   dey
+0056B8  1  D0 F8                bne @w
+0056BA  1  CA                   dex
+0056BB  1  D0 F5                bne @w
+0056BD  1  C6 FC                dec TMP
+0056BF  1  D0 F1                bne @w
+0056C1  1  38                   sec
+0056C2  1  60                   rts
+0056C3  1  18           @ok:    clc
+0056C4  1  60                   rts
+0056C5  1               
+0056C5  1               
+0056C5  1  29 7F        pch:    and #$7F
+0056C7  1  C9 20                cmp #$20
+0056C9  1  B0 02                bcs @p
+0056CB  1  A9 2E                lda #'.'
+0056CD  1  09 80        @p:     ora #$80
+0056CF  1  4C ED FD             jmp COUT
+0056D2  1               
+0056D2  1               ; imprime string inline (terminada em 0) logo apos o JSR; preserva X e Y
+0056D2  1  68           msg:    pla
+0056D3  1  85 FA                sta MP
+0056D5  1  68                   pla
+0056D6  1  85 FB                sta MP+1
+0056D8  1  E6 FA        @m:     inc MP
+0056DA  1  D0 02                bne @m2
+0056DC  1  E6 FB                inc MP+1
+0056DE  1  B2 FA        @m2:    lda (MP)
+0056E0  1  F0 07                beq @d
+0056E2  1  09 80                ora #$80
+0056E4  1  20 ED FD             jsr COUT
+0056E7  1  80 EF                bra @m
+0056E9  1  A5 FB        @d:     lda MP+1
+0056EB  1  48                   pha
+0056EC  1  A5 FA                lda MP
+0056EE  1  48                   pha
+0056EF  1  60                   rts
+0056F0  1               
+0056F0  1               

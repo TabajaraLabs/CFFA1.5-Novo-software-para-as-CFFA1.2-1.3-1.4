@@ -1,0 +1,21 @@
+Programas em Applesoft para ligar o console na Super Serial (slot 1) - v1
+Digitar no Apple (prompt ] do BASIC.SYSTEM, num volume da BOOTI) e salvar com SAVE.
+Depois, para usar: -SR ou -SM e Return.
+
+---- SR (so liga a serial) ----
+NEW
+10 PRINT CHR$(4);"PR#1"
+20 PRINT CHR$(4);"IN#1"
+SAVE SR
+
+---- SM (liga a serial e ja entra no monitor) ----
+NEW
+10 PRINT CHR$(4);"PR#1"
+20 PRINT CHR$(4);"IN#1"
+30 CALL -151
+SAVE SM
+
+Observacoes:
+- Num programa do BASIC.SYSTEM, PR#/IN# tem que ser dados pelo CHR$(4) (Ctrl-D); digitados direto no prompt funcionam sem ele.
+- Para voltar ao teclado e a tela do Apple: IN#0 e PR#0 (ou Ctrl-Reset).
+- Se quiser que isso aconteca sempre no boot da BOOTI, salve o SR com o nome STARTUP.

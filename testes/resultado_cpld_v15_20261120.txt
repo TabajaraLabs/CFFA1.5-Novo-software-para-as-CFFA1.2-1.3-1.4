@@ -1,0 +1,7 @@
+Teste da logica CPLD v1.5 gravada na CFFA v1.2 (slot 7), EEPROM X28C256 na fase 0 - 2026-11-20
+- Quartus II 13.0sp1: 27/64 macrocelulas, pinos conforme o .qsf (pino 8 = nWE, 27 = BK14, 24 = livre como entrada),
+  Fmax 92,6 MHz (o 7M precisa de 7,16 MHz). O aviso "timing not met" e so porque nao ha arquivo .sdc (relogio padrao de 1 GHz).
+- ROM: copia de $C800-$CEFF para $6800 e comparacao -> 0 diferencas com o banco 4 (06:25).
+  (Uma primeira tentativa as 06:21 deu leitura errada: rotina de copia em $6100, dentro da area do idetest; refeita em $6300.)
+- idetest_v1 (06:23): IDENTIFY igual; laco original 3,15 s, rapido 2,44 s, somas 9AB7 iguais -> igual ao CPLD 1.4.
+Conclusao: a v1.5 se comporta como a 1.4. Pode seguir para a fiacao da fase 2.

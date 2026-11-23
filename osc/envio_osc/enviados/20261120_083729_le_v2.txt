@@ -1,0 +1,5 @@
+:TER?
+:OPERegister:CONDition?
+#png a14_depois_v2
+:MEASure:VMAX? CHANnel1
+:MEASure:VMIN? CHANnel1

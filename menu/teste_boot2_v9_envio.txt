@@ -1,0 +1,6 @@
+#raw
+#idle 1.5
+#chardelay 0.03
+48:00
+400AG
+#idle 4

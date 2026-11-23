@@ -1,0 +1,22 @@
+#raw
+#idle 1.5
+#chardelay 0.03
+6003:01
+6000G
+#sendbin rom\banco4_spdrv14_C700-CEFF_v2.bin 256
+#pause 15
+#idle 3
+C0F5
+C7F5.C7FA
+#idle 2
+6400G
+#pause 6
+6400G
+#pause 6
+C0F4
+6400G
+#pause 6
+C0F5
+6400G
+#pause 6
+#idle 2

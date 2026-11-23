@@ -1,0 +1,10 @@
+Teste de troca de banco com a logica v1.6 (CFFA 1.2 no slot 7, jumper A14 aberto, pull-up 10k no A14) - 2026-11-20 08:28
+Programa em $6300; byte lido em $C708 (banco 0 = $80, banco 4 = $10) guardado em $300-$306:
+  $300 depois de ler $C0F4 ............................ 80 (banco 0) ok
+  $301 depois de ler $C0F5 ............................ 10 (banco 4) ok
+  $302 depois de escrever $C0F4 ....................... 80 (banco 0) ok
+  $303 depois de 65.536 leituras do status ($C0FF) ...... 80 ok (nao mudou sozinho)
+  $304 depois de 65.536 escritas em $C0F0 ............... 80 ok
+  $305 escrever $C0F5 + 65.536 leituras do status ....... 10 ok (ficou no banco 4)
+  $306 depois de ler $C0F4 ............................ 80 ok
+Com a v1.5/v1.5.1 o mesmo tipo de teste dava 10 em tudo.

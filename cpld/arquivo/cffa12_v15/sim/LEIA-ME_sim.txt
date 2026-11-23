@@ -1,0 +1,6 @@
+Simulacao da logica v1.5 (Icarus Verilog), 2026-11-20
+- ref14.v: equacoes do relatorio da logica 1.4 (appleideinterface.rpt) transcritas literalmente.
+- tb.v: 200.000 vetores aleatorios comparando a v1.5 com a 1.4 nas 14 saidas originais -> 0 diferencas.
+- tb2.v: teste dirigido das funcoes novas (trava/destrava em $C0F3, /WE de ~279 ns so com destrava,
+  nenhum /WE em $CFxx, banco em $C0F4/$C0F5) -> tudo como esperado.
+Rodar: iverilog -g2005 -o s tb.v ref14.v ../cffa_core_v15.v && vvp s

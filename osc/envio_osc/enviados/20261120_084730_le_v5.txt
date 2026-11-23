@@ -1,0 +1,4 @@
+:TER?
+:MEASure:VMAX? CHANnel1
+:MEASure:VMIN? CHANnel1
+#png rc330_v2

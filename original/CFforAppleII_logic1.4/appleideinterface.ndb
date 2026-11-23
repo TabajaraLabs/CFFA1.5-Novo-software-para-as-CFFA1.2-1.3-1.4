@@ -1,0 +1,133 @@
+NDB006
+The number of symbol table entries is: 2
+The length of the symbol table is: 33
+
+Index Hierarchy Path
+----- --------------
+!	&null_hpath&
+.	|appleidelogic:147|
+
+The number of name info structs is : 120
+
+InsOrder BitField SymTableIndex NextSyn SynParent Loc ChainType NextChain ChainParent FanOut DirExp ParExp ShareExp NodeName
+-------- -------- ------------- ------- --------- --- --------- --------- ----------- ------ ------ ------ -------- --------
+"	IGdq	!	-CS0	|
+#	IGdq	!	-CS1	}
+$	Ky&|	!	21	"7	"	#	(	;	+	<	"8	4	"	#	5	(	)	6	7	8	;	*	<	"6	-DevSelect	o
+%	IGdq	!	-EPROM_EN	"+
+&	Ky&|	!	3	=	5	%	-I/OSelect	r
+'	Ky&|	!	3	=	5	%	-I/OStrobe	q
+(	IGdq	!	-IORD	"$
+)	IGdq	!	-IOWR	"#
+*	IGdq	!	-R_HOST	"&
++	IGdq	!	-W_ATA	""
+,	(@>U^	!	8	4	7	8	6	"8	"6	=	"7	7Mclk	p
+-	Ky&|	!	1	6	A0	w
+.	Ky&|	!	1	7	A1	z
+/	Ky&|	!	1	=	A10	u
+0	Ky&|	!	1	8	A2	y
+1	Ky&|	!	10	4	"	#	(	)	;	*	+	<	"8	A3	x
+2	Ky&|	!	1	=	A8	s
+3	Ky&|	!	1	=	A9	v
+4	Ky&}	!	3	4	"	#	CS_MASK	{
+5	IGdq	!	DBUS245	~
+6	Ky&}	!	7	4	(	)	;	*	+	<	LA0	")
+7	Ky&}	!	8	4	#	(	)	;	*	+	<	LA1	"'
+8	Ky&}	!	8	4	#	(	)	;	*	+	<	LA2	"(
+9	IGdq	!	NOT_R/W	"*
+:	Ky&|	!	9	"	#	(	)	9	;	*	+	<	R/W	t
+;	IGdq	!	R_ATA	"%
+<	IGdq	!	W_HOST	"!
+=	L8e}	.	70	13	3	=	5	%	/C800_FF	"t
+>	IeEA	.	103	10	/CFXX	#;
+?	IeEA	.	103	22	:100	#8
+@	IeEA	.	103	28	:101	#9
+A	IeEA	.	103	28	:102	#:
+B	IeEA	.	106	19	:104	#<
+C	IeEA	.	106	25	:105	#=
+D	IeEA	.	106	31	:106	#>
+E	IeEA	.	106	37	:107	#?
+F	IeEA	.	106	43	:108	#@
+G	IeEA	.	106	43	:109	#A
+H	IeEA	.	109	20	:110	#B
+I	IeEA	.	109	20	:111	#C
+J	IeEA	.	109	20	:112	#D
+K	IeEA	.	109	34	:113	#E
+L	IeEA	.	109	41	:114	#F
+M	IeEA	.	109	41	:115	#G
+N	IeEA	.	109	48	:116	#H
+O	IeEA	.	109	48	:117	#I
+P	IeEA	.	109	55	:118	#J
+Q	IeEA	.	109	55	:119	#K
+R	IeEA	.	109	62	:120	#L
+S	IeEA	.	113	20	:121	#M
+T	IeEA	.	113	20	:122	#N
+U	IeEA	.	113	20	:123	#O
+V	IeEA	.	113	42	:124	#P
+W	IeEA	.	113	48	:125	#Q
+X	IeEA	.	113	54	:126	#R
+Y	IeEA	.	113	34	:127	#S
+Z	IeEA	.	113	34	:128	#T
+[	IeEA	.	113	61	:129	#U
+\	IeEA	.	113	61	:130	#V
+]	IeEA	.	117	24	:131	#W
+^	IeEA	.	117	24	:132	#X
+_	IeEA	.	117	31	:133	#Y
+`	IeEA	.	117	37	:134	#Z
+a	IeEA	.	117	43	:135	#[
+b	IeEA	.	117	49	:136	#\
+c	IeEA	.	120	18	:137	#]
+d	IeEA	.	120	32	:138	#^
+e	IeEA	.	120	32	:139	#_
+f	IeEA	.	120	50	:140	#`
+g	IeEA	.	120	39	:141	#a
+h	IeEA	.	121	18	:142	#b
+i	IeEA	.	121	47	:143	#c
+j	IeEA	.	121	39	:144	#d
+k	IeEA	.	121	39	:145	#e
+l	IeEA	.	121	32	:146	#f
+m	IeEA	.	121	66	:147	#g
+n	IeEA	.	121	55	:148	#h
+o	IeEA	.	122	19	:149	#i
+p	IeEA	.	122	31	:150	#j
+q	IeEA	.	86	53	:151	#k
+r	IeEA	.	86	53	:152	#l
+s	IeEA	.	70	46	:153	#m
+t	IeEA	.	70	46	:154	#n
+u	IeE1	.	64	9	:62	"p
+v	IeE1	.	65	9	:63	"q
+w	IeE1	.	66	9	:64	"r
+x	IeE1	.	86	14	:67	"u
+y	IeEA	.	74	10	:71	"y
+z	IeEA	.	77	24	:72	"z
+{	IeEA	.	77	36	:73	"{
+|	IeEA	.	84	27	:74	"|
+}	IeEA	.	84	33	:75	"}
+~	IeEA	.	84	39	:76	"~
+"!	IeEA	.	84	39	:77	#!
+""	IeEA	.	85	29	:79	##
+"#	IeEA	.	85	35	:80	#$
+"$	IeEA	.	85	35	:81	#%
+"%	IeEA	.	85	42	:82	#&
+"&	IeEA	.	99	17	:84	#(
+"'	IeEA	.	99	30	:85	#)
+"(	IeEA	.	99	45	:86	#*
+")	IeEA	.	99	51	:87	#+
+"*	IeEA	.	99	57	:88	#,
+"+	IeEA	.	99	37	:89	#-
+",	IeEA	.	99	37	:90	#.
+"-	IeEA	.	100	17	:91	#/
+".	IeEA	.	100	30	:92	#0
+"/	IeEA	.	100	30	:93	#1
+"0	IeEA	.	100	45	:94	#2
+"1	IeEA	.	100	51	:95	#3
+"2	IeEA	.	100	57	:96	#4
+"3	IeEA	.	100	37	:97	#5
+"4	IeEA	.	100	37	:98	#6
+"5	IeEA	.	103	17	:99	#7
+"6	IeEq	.	97	15	DelayDSEL1	"v
+"7	L8e}	.	98	15	1	)	DelayDSEL2	"w
+"8	IeEq	.	67	9	LA3	"s
+"9	IeEA	.	62	13	NOT_7Mclk	"x
+":	IeEA	.	85	22	RESET_MASK	#'
+";	IeEA	.	84	20	SET_MASK	#"

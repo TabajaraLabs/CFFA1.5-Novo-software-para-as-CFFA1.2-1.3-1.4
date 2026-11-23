@@ -1,0 +1,444 @@
+Fitter report for cffa12_v151
+Fri Nov 20 07:05:17 2026
+Quartus II 32-bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
+
+
+---------------------
+; Table of Contents ;
+---------------------
+  1. Legal Notice
+  2. Fitter Summary
+  3. Fitter Settings
+  4. Parallel Compilation
+  5. Pin-Out File
+  6. Fitter Resource Usage Summary
+  7. Input Pins
+  8. Output Pins
+  9. Bidir Pins
+ 10. All Package Pins
+ 11. I/O Standard
+ 12. Dedicated Inputs I/O
+ 13. Output Pin Default Load For Reported TCO
+ 14. Fitter Resource Utilization by Entity
+ 15. Control Signals
+ 16. Global & Other Fast Signals
+ 17. Non-Global High Fan-Out Signals
+ 18. Other Routing Usage Summary
+ 19. LAB Macrocells
+ 20. Parallel Expander
+ 21. Logic Cell Interconnection
+ 22. Fitter Device Options
+ 23. Fitter Messages
+
+
+
+----------------
+; Legal Notice ;
+----------------
+Copyright (C) 1991-2013 Altera Corporation
+Your use of Altera Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Altera Program License 
+Subscription Agreement, Altera MegaCore Function License 
+Agreement, or other applicable license agreement, including, 
+without limitation, that your use is for the sole purpose of 
+programming logic devices manufactured by Altera and sold by 
+Altera or its authorized distributors.  Please refer to the 
+applicable agreement for further details.
+
+
+
++-----------------------------------------------------------------------------+
+; Fitter Summary                                                              ;
++---------------------------+-------------------------------------------------+
+; Fitter Status             ; Successful - Fri Nov 20 07:05:17 2026           ;
+; Quartus II 32-bit Version ; 13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition ;
+; Revision Name             ; cffa12_v151                                     ;
+; Top-level Entity Name     ; cffa12_v151                                     ;
+; Family                    ; MAX7000S                                        ;
+; Device                    ; EPM7064SLC44-10                                 ;
+; Timing Models             ; Final                                           ;
+; Total macrocells          ; 27 / 64 ( 42 % )                                ;
+; Total pins                ; 32 / 36 ( 89 % )                                ;
++---------------------------+-------------------------------------------------+
+
+
++--------------------------------------------------------------------------------------------------------------+
+; Fitter Settings                                                                                              ;
++----------------------------------------------------------------------------+-----------------+---------------+
+; Option                                                                     ; Setting         ; Default Value ;
++----------------------------------------------------------------------------+-----------------+---------------+
+; Device                                                                     ; EPM7064SLC44-10 ;               ;
+; Use smart compilation                                                      ; Off             ; Off           ;
+; Enable parallel Assembler and TimeQuest Timing Analyzer during compilation ; On              ; On            ;
+; Enable compact report table                                                ; Off             ; Off           ;
+; Optimize Multi-Corner Timing                                               ; Off             ; Off           ;
+; Optimize Timing for ECOs                                                   ; Off             ; Off           ;
+; Regenerate full fit report during ECO compiles                             ; Off             ; Off           ;
+; Optimize IOC Register Placement for Timing                                 ; Normal          ; Normal        ;
+; Fitter Initial Placement Seed                                              ; 1               ; 1             ;
+; Slow Slew Rate                                                             ; Off             ; Off           ;
+; Fitter Effort                                                              ; Auto Fit        ; Auto Fit      ;
+; Force Fitter to Avoid Periphery Placement Warnings                         ; Off             ; Off           ;
++----------------------------------------------------------------------------+-----------------+---------------+
+
+
+Parallel compilation was disabled, but you have multiple processors available. Enable parallel compilation to reduce compilation time.
++-------------------------------------+
+; Parallel Compilation                ;
++----------------------------+--------+
+; Processors                 ; Number ;
++----------------------------+--------+
+; Number detected on machine ; 16     ;
+; Maximum allowed            ; 1      ;
++----------------------------+--------+
+
+
++--------------+
+; Pin-Out File ;
++--------------+
+The pin-out file can be found in C:/Users/Alexandre/Documents/Claude/Apple II/CFFA/cpld/cffa12_v151/cffa12_v151.pin.
+
+
++-------------------------------------------------+
+; Fitter Resource Usage Summary                   ;
++------------------------------+------------------+
+; Resource                     ; Usage            ;
++------------------------------+------------------+
+; Logic cells                  ; 27 / 64 ( 42 % ) ;
+; Registers                    ; 13 / 64 ( 20 % ) ;
+; Number of pterms used        ; 70               ;
+; I/O pins                     ; 32 / 36 ( 89 % ) ;
+;     -- Clock pins            ; 1 / 2 ( 50 % )   ;
+;     -- Dedicated input pins  ; 0 / 2 ( 0 % )    ;
+;                              ;                  ;
+; Global signals               ; 1                ;
+; Shareable expanders          ; 0 / 64 ( 0 % )   ;
+; Parallel expanders           ; 3 / 60 ( 5 % )   ;
+; Cells using turbo bit        ; 27 / 64 ( 42 % ) ;
+; Maximum fan-out              ; 18               ;
+; Highest non-global fan-out   ; 18               ;
+; Total fan-out                ; 182              ;
+; Average fan-out              ; 3.08             ;
++------------------------------+------------------+
+
+
++-----------------------------------------------------------------------------------------------------------------------------------------------+
+; Input Pins                                                                                                                                    ;
++---------+-------+----------+-----+-----------------------+--------------------+--------+----------------+--------------+----------------------+
+; Name    ; Pin # ; I/O Bank ; LAB ; Combinational Fan-Out ; Registered Fan-Out ; Global ; Input Register ; I/O Standard ; Location assigned by ;
++---------+-------+----------+-----+-----------------------+--------------------+--------+----------------+--------------+----------------------+
+; A0      ; 21    ; --       ; 2   ; 1                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; A1      ; 20    ; --       ; 2   ; 1                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; A10     ; 14    ; --       ; 2   ; 6                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; A2      ; 19    ; --       ; 2   ; 1                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; A3      ; 18    ; --       ; 2   ; 1                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; A8      ; 17    ; --       ; 2   ; 5                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; A9      ; 16    ; --       ; 2   ; 6                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; CLK7M   ; 43    ; --       ; --  ; 13                    ; 0                  ; yes    ; no             ; TTL          ; User                 ;
+; RW      ; 12    ; --       ; 1   ; 18                    ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; nDEVSEL ; 6     ; --       ; 1   ; 16                    ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; nIOSEL  ; 4     ; --       ; 1   ; 10                    ; 0                  ; no     ; no             ; TTL          ; User                 ;
+; nIOSTRB ; 5     ; --       ; 1   ; 9                     ; 0                  ; no     ; no             ; TTL          ; User                 ;
++---------+-------+----------+-----+-----------------------+--------------------+--------+----------------+--------------+----------------------+
+
+
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Output Pins                                                                                                                                                                                   ;
++-----------+-------+----------+-----+-----------------+----------------+------------+---------------+--------------+----------------------+-------+----------------------+---------------------+
+; Name      ; Pin # ; I/O Bank ; LAB ; Output Register ; Slow Slew Rate ; Open Drain ; TRI Primitive ; I/O Standard ; Location assigned by ; Load  ; Output Enable Source ; Output Enable Group ;
++-----------+-------+----------+-----+-----------------+----------------+------------+---------------+--------------+----------------------+-------+----------------------+---------------------+
+; LA0       ; 9     ; --       ; 1   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; LA1       ; 11    ; --       ; 1   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; LA2       ; 28    ; --       ; 3   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; NOT_RW    ; 26    ; --       ; 3   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; R_ATA     ; 33    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; W_HOST    ; 34    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nCS0      ; 40    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nCS1      ; 41    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nDBUS245  ; 25    ; --       ; 3   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nEPROM_EN ; 29    ; --       ; 3   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nIORD     ; 39    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nIOWR     ; 37    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nR_HOST   ; 31    ; --       ; 3   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nWE       ; 8     ; --       ; 1   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
+; nW_ATA    ; 36    ; --       ; 4   ; no              ; yes            ; no         ; no            ; TTL          ; User                 ; 10 pF ; -                    ; -                   ;
++-----------+-------+----------+-----+-----------------+----------------+------------+---------------+--------------+----------------------+-------+----------------------+---------------------+
+
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Bidir Pins                                                                                                                                                                                                                                                 ;
++------+-------+----------+-----+-----------------------+--------------------+--------+----------------+-----------------+----------------+------------+--------------+----------------------+-------+---------------------------------+---------------------+
+; Name ; Pin # ; I/O Bank ; LAB ; Combinational Fan-Out ; Registered Fan-Out ; Global ; Input Register ; Output Register ; Slow Slew Rate ; Open Drain ; I/O Standard ; Location assigned by ; Load  ; Output Enable Source            ; Output Enable Group ;
++------+-------+----------+-----+-----------------------+--------------------+--------+----------------+-----------------+----------------+------------+--------------+----------------------+-------+---------------------------------+---------------------+
+; BK14 ; 27    ; --       ; 3   ; 0                     ; 0                  ; no     ; no             ; no              ; yes            ; yes        ; TTL          ; User                 ; 10 pF ; cffa_core_v15:u|bk14 (inverted) ; -                   ;
++------+-------+----------+-----+-----------------------+--------------------+--------+----------------+-----------------+----------------+------------+--------------+----------------------+-------+---------------------------------+---------------------+
+
+
++-------------------------------------------------------------------------------------------------------+
+; All Package Pins                                                                                      ;
++----------+------------+----------+----------------+--------+--------------+---------+-----------------+
+; Location ; Pad Number ; I/O Bank ; Pin Name/Usage ; Dir.   ; I/O Standard ; Voltage ; User Assignment ;
++----------+------------+----------+----------------+--------+--------------+---------+-----------------+
+; 1        ; 0          ; --       ; GND+           ;        ;              ;         ;                 ;
+; 2        ; 1          ; --       ; GND+           ;        ;              ;         ;                 ;
+; 3        ; 2          ; --       ; VCC            ; power  ;              ;         ;                 ;
+; 4        ; 3          ; --       ; nIOSEL         ; input  ; TTL          ;         ; Y               ;
+; 5        ; 4          ; --       ; nIOSTRB        ; input  ; TTL          ;         ; Y               ;
+; 6        ; 5          ; --       ; nDEVSEL        ; input  ; TTL          ;         ; Y               ;
+; 7        ; 6          ; --       ; TDI            ; input  ; TTL          ;         ; N               ;
+; 8        ; 7          ; --       ; nWE            ; output ; TTL          ;         ; Y               ;
+; 9        ; 8          ; --       ; LA0            ; output ; TTL          ;         ; Y               ;
+; 10       ; 9          ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 11       ; 10         ; --       ; LA1            ; output ; TTL          ;         ; Y               ;
+; 12       ; 11         ; --       ; RW             ; input  ; TTL          ;         ; Y               ;
+; 13       ; 12         ; --       ; TMS            ; input  ; TTL          ;         ; N               ;
+; 14       ; 13         ; --       ; A10            ; input  ; TTL          ;         ; Y               ;
+; 15       ; 14         ; --       ; VCC            ; power  ;              ;         ;                 ;
+; 16       ; 15         ; --       ; A9             ; input  ; TTL          ;         ; Y               ;
+; 17       ; 16         ; --       ; A8             ; input  ; TTL          ;         ; Y               ;
+; 18       ; 17         ; --       ; A3             ; input  ; TTL          ;         ; Y               ;
+; 19       ; 18         ; --       ; A2             ; input  ; TTL          ;         ; Y               ;
+; 20       ; 19         ; --       ; A1             ; input  ; TTL          ;         ; Y               ;
+; 21       ; 20         ; --       ; A0             ; input  ; TTL          ;         ; Y               ;
+; 22       ; 21         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 23       ; 22         ; --       ; VCC            ; power  ;              ;         ;                 ;
+; 24       ; 23         ; --       ; RESERVED_INPUT ;        ;              ;         ;                 ;
+; 25       ; 24         ; --       ; nDBUS245       ; output ; TTL          ;         ; Y               ;
+; 26       ; 25         ; --       ; NOT_RW         ; output ; TTL          ;         ; Y               ;
+; 27       ; 26         ; --       ; BK14           ; bidir  ; TTL          ;         ; Y               ;
+; 28       ; 27         ; --       ; LA2            ; output ; TTL          ;         ; Y               ;
+; 29       ; 28         ; --       ; nEPROM_EN      ; output ; TTL          ;         ; Y               ;
+; 30       ; 29         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 31       ; 30         ; --       ; nR_HOST        ; output ; TTL          ;         ; Y               ;
+; 32       ; 31         ; --       ; TCK            ; input  ; TTL          ;         ; N               ;
+; 33       ; 32         ; --       ; R_ATA          ; output ; TTL          ;         ; Y               ;
+; 34       ; 33         ; --       ; W_HOST         ; output ; TTL          ;         ; Y               ;
+; 35       ; 34         ; --       ; VCC            ; power  ;              ;         ;                 ;
+; 36       ; 35         ; --       ; nW_ATA         ; output ; TTL          ;         ; Y               ;
+; 37       ; 36         ; --       ; nIOWR          ; output ; TTL          ;         ; Y               ;
+; 38       ; 37         ; --       ; TDO            ; output ; TTL          ;         ; N               ;
+; 39       ; 38         ; --       ; nIORD          ; output ; TTL          ;         ; Y               ;
+; 40       ; 39         ; --       ; nCS0           ; output ; TTL          ;         ; Y               ;
+; 41       ; 40         ; --       ; nCS1           ; output ; TTL          ;         ; Y               ;
+; 42       ; 41         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 43       ; 42         ; --       ; CLK7M          ; input  ; TTL          ;         ; Y               ;
+; 44       ; 43         ; --       ; GND+           ;        ;              ;         ;                 ;
++----------+------------+----------+----------------+--------+--------------+---------+-----------------+
+Note: Pin directions (input, output or bidir) are based on device operating in user mode.
+
+
++--------------------------------------------------------------------------------------------------+
+; I/O Standard                                                                                     ;
++--------------+------------+----------------------+-------------------+-------------------+-------+
+; I/O Standard ; Input Vref ; Dedicated Input Pins ; Pins in I/O Bank1 ; Pins in I/O Bank2 ; Total ;
++--------------+------------+----------------------+-------------------+-------------------+-------+
+; TTL          ; -          ; 1                    ; 0                 ; 0                 ; 1     ;
++--------------+------------+----------------------+-------------------+-------------------+-------+
+
+
++---------------------------------------------------------------------+
+; Dedicated Inputs I/O                                                ;
++-------+-------+-------+-------+--------------+------------+---------+
+; Name  ; Pin # ; Type  ; VCCIO ; I/O Standard ; Input Vref ; Current ;
++-------+-------+-------+-------+--------------+------------+---------+
+; CLK7M ; 43    ; Input ; --    ; TTL          ; -          ; 0 mA    ;
++-------+-------+-------+-------+--------------+------------+---------+
+
+
++-----------------------------------------------+
+; Output Pin Default Load For Reported TCO      ;
++--------------+-------+------------------------+
+; I/O Standard ; Load  ; Termination Resistance ;
++--------------+-------+------------------------+
+; TTL          ; 10 pF ; Not Available          ;
++--------------+-------+------------------------+
+Note: User assignments will override these defaults. The user specified values are listed in the Output Pins and Bidir Pins tables.
+
+
++----------------------------------------------------------------------------------------------+
+; Fitter Resource Utilization by Entity                                                        ;
++----------------------------+------------+------+------------------------------+--------------+
+; Compilation Hierarchy Node ; Macrocells ; Pins ; Full Hierarchy Name          ; Library Name ;
++----------------------------+------------+------+------------------------------+--------------+
+; |cffa12_v151               ; 27         ; 32   ; |cffa12_v151                 ; work         ;
+;    |cffa_core_v15:u|       ; 26         ; 0    ; |cffa12_v151|cffa_core_v15:u ; work         ;
++----------------------------+------------+------+------------------------------+--------------+
+
+
++------------------------------------------------------------------------------------------------------------+
+; Control Signals                                                                                            ;
++---------------------+----------+---------+--------------+--------+----------------------+------------------+
+; Name                ; Location ; Fan-Out ; Usage        ; Global ; Global Resource Used ; Global Line Name ;
++---------------------+----------+---------+--------------+--------+----------------------+------------------+
+; CLK7M               ; PIN_43   ; 13      ; Clock        ; yes    ; On                   ; --               ;
+; cffa_core_v15:u|la0 ; LC4      ; 10      ; Clock enable ; no     ; --                   ; --               ;
+; cffa_core_v15:u|la1 ; LC3      ; 11      ; Clock enable ; no     ; --                   ; --               ;
+; cffa_core_v15:u|la2 ; LC40     ; 11      ; Clock enable ; no     ; --                   ; --               ;
+; cffa_core_v15:u|la3 ; LC10     ; 11      ; Clock enable ; no     ; --                   ; --               ;
+; nDEVSEL             ; PIN_6    ; 16      ; Clock enable ; no     ; --                   ; --               ;
++---------------------+----------+---------+--------------+--------+----------------------+------------------+
+
+
++----------------------------------------------------------------------+
+; Global & Other Fast Signals                                          ;
++-------+----------+---------+----------------------+------------------+
+; Name  ; Location ; Fan-Out ; Global Resource Used ; Global Line Name ;
++-------+----------+---------+----------------------+------------------+
+; CLK7M ; PIN_43   ; 13      ; On                   ; --               ;
++-------+----------+---------+----------------------+------------------+
+
+
++---------------------------------------+
+; Non-Global High Fan-Out Signals       ;
++-----------------------------+---------+
+; Name                        ; Fan-Out ;
++-----------------------------+---------+
+; RW                          ; 18      ;
+; nDEVSEL                     ; 16      ;
+; cffa_core_v15:u|la1         ; 11      ;
+; cffa_core_v15:u|la2         ; 11      ;
+; cffa_core_v15:u|la3         ; 11      ;
+; nIOSEL                      ; 10      ;
+; cffa_core_v15:u|nC800_FF    ; 10      ;
+; cffa_core_v15:u|la0         ; 10      ;
+; nIOSTRB                     ; 9       ;
+; cffa_core_v15:u|we_en       ; 7       ;
+; cffa_core_v15:u|dsel1       ; 7       ;
+; A10                         ; 6       ;
+; A9                          ; 6       ;
+; A8                          ; 5       ;
+; cffa_core_v15:u|w1          ; 4       ;
+; cffa_core_v15:u|cs_mask     ; 3       ;
+; cffa_core_v15:u|w3          ; 2       ;
+; cffa_core_v15:u|w2          ; 2       ;
+; A3                          ; 1       ;
+; A2                          ; 1       ;
+; A1                          ; 1       ;
+; A0                          ; 1       ;
+; cffa_core_v15:u|w3~7        ; 1       ;
+; cffa_core_v15:u|w2~8        ; 1       ;
+; cffa_core_v15:u|nWE~5       ; 1       ;
+; cffa_core_v15:u|nCS1~2      ; 1       ;
+; cffa_core_v15:u|nCS0~5      ; 1       ;
+; cffa_core_v15:u|nDBUS245~2  ; 1       ;
+; cffa_core_v15:u|W_HOST~3    ; 1       ;
+; cffa_core_v15:u|bk14        ; 1       ;
+; cffa_core_v15:u|nR_HOST~0   ; 1       ;
+; cffa_core_v15:u|nIORD~1     ; 1       ;
+; cffa_core_v15:u|nIOWR~1     ; 1       ;
+; cffa_core_v15:u|nEPROM_EN~3 ; 1       ;
+; cffa_core_v15:u|R_ATA~5     ; 1       ;
+; cffa_core_v15:u|nW_ATA~0    ; 1       ;
+; cffa_core_v15:u|dsel2       ; 1       ;
+; cffa_core_v15:u|nWE~11      ; 1       ;
+; RW~1                        ; 1       ;
++-----------------------------+---------+
+
+
++-------------------------------------------------+
+; Other Routing Usage Summary                     ;
++-----------------------------+-------------------+
+; Other Routing Resource Type ; Usage             ;
++-----------------------------+-------------------+
+; Output enables              ; 0 / 6 ( 0 % )     ;
+; PIA buffers                 ; 38 / 144 ( 26 % ) ;
++-----------------------------+-------------------+
+
+
++----------------------------------------------------------------------+
+; LAB Macrocells                                                       ;
++----------------------------------------+-----------------------------+
+; Number of Macrocells  (Average = 6.75) ; Number of LABs  (Total = 3) ;
++----------------------------------------+-----------------------------+
+; 0                                      ; 1                           ;
+; 1                                      ; 0                           ;
+; 2                                      ; 0                           ;
+; 3                                      ; 0                           ;
+; 4                                      ; 0                           ;
+; 5                                      ; 0                           ;
+; 6                                      ; 1                           ;
+; 7                                      ; 0                           ;
+; 8                                      ; 0                           ;
+; 9                                      ; 1                           ;
+; 10                                     ; 0                           ;
+; 11                                     ; 0                           ;
+; 12                                     ; 1                           ;
++----------------------------------------+-----------------------------+
+
+
++---------------------------------------------------------+
+; Parallel Expander                                       ;
++--------------------------+------------------------------+
+; Parallel Expander Length ; Number of Parallel Expanders ;
++--------------------------+------------------------------+
+; 0                        ; 0                            ;
+; 1                        ; 3                            ;
++--------------------------+------------------------------+
+
+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Logic Cell Interconnection                                                                                                                                                                                                                                                                                                                                                                                                                         ;
++-----+------------+------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; LAB ; Logic Cell ; Input                                                                                                                                          ; Output                                                                                                                                                                                                                                                                         ;
++-----+------------+------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+;  A  ; LC10       ; CLK7M, A3, nDEVSEL                                                                                                                             ; cffa_core_v15:u|nW_ATA~0, cffa_core_v15:u|we_en, cffa_core_v15:u|R_ATA~5, cffa_core_v15:u|nIOWR~1, cffa_core_v15:u|nIORD~1, cffa_core_v15:u|nR_HOST~0, cffa_core_v15:u|bk14, cffa_core_v15:u|W_HOST~3, cffa_core_v15:u|cs_mask, cffa_core_v15:u|nCS0~5, cffa_core_v15:u|nCS1~2 ;
+;  A  ; LC12       ; CLK7M, nDEVSEL                                                                                                                                 ; cffa_core_v15:u|dsel2, cffa_core_v15:u|nW_ATA~0, cffa_core_v15:u|R_ATA~5, cffa_core_v15:u|nIORD~1, cffa_core_v15:u|W_HOST~3, cffa_core_v15:u|nCS0~5, cffa_core_v15:u|nCS1~2                                                                                                    ;
+;  A  ; LC3        ; CLK7M, A1, nDEVSEL                                                                                                                             ; LA1, cffa_core_v15:u|nW_ATA~0, cffa_core_v15:u|we_en, cffa_core_v15:u|R_ATA~5, cffa_core_v15:u|nIOWR~1, cffa_core_v15:u|nIORD~1, cffa_core_v15:u|nR_HOST~0, cffa_core_v15:u|bk14, cffa_core_v15:u|W_HOST~3, cffa_core_v15:u|cs_mask, cffa_core_v15:u|nCS1~2                    ;
+;  A  ; LC4        ; CLK7M, A0, nDEVSEL, A9, cffa_core_v15:u|nC800_FF, cffa_core_v15:u|w3, RW, nIOSEL, cffa_core_v15:u|we_en, cffa_core_v15:u|w1, A10               ; LA0, cffa_core_v15:u|nW_ATA~0, cffa_core_v15:u|we_en, cffa_core_v15:u|R_ATA~5, cffa_core_v15:u|nIOWR~1, cffa_core_v15:u|nIORD~1, cffa_core_v15:u|nR_HOST~0, cffa_core_v15:u|bk14, cffa_core_v15:u|W_HOST~3, cffa_core_v15:u|cs_mask, cffa_core_v15:u|nWE~5                     ;
+;  A  ; LC6        ; CLK7M, A8, A9, A10, nIOSTRB, cffa_core_v15:u|nC800_FF, nIOSEL                                                                                  ; cffa_core_v15:u|nC800_FF, cffa_core_v15:u|nEPROM_EN~3, cffa_core_v15:u|nDBUS245~2, cffa_core_v15:u|w1, cffa_core_v15:u|w2, cffa_core_v15:u|w3, cffa_core_v15:u|nWE~5, cffa_core_v15:u|w2~8, cffa_core_v15:u|w3~7, cffa_core_v15:u|la0                                          ;
+;  A  ; LC13       ; CLK7M, RW, cffa_core_v15:u|la2, cffa_core_v15:u|la1, nDEVSEL, cffa_core_v15:u|la3, cffa_core_v15:u|la0                                         ; cffa_core_v15:u|w1, cffa_core_v15:u|w2, cffa_core_v15:u|w3, cffa_core_v15:u|nWE~5, cffa_core_v15:u|w2~8, cffa_core_v15:u|w3~7, cffa_core_v15:u|la0                                                                                                                             ;
+;  A  ; LC14       ; CLK7M, A8, A9, A10, nIOSTRB, RW, cffa_core_v15:u|we_en, nIOSEL, cffa_core_v15:u|nC800_FF                                                       ; cffa_core_v15:u|w2, cffa_core_v15:u|nWE~5, cffa_core_v15:u|w2~8, cffa_core_v15:u|la0                                                                                                                                                                                           ;
+;  A  ; LC8        ; CLK7M, cffa_core_v15:u|w2~8, A9, cffa_core_v15:u|nC800_FF, RW, nIOSTRB, nIOSEL, cffa_core_v15:u|we_en, cffa_core_v15:u|w1, A10                 ; cffa_core_v15:u|w3, cffa_core_v15:u|w3~7                                                                                                                                                                                                                                       ;
+;  A  ; LC2        ; CLK7M, cffa_core_v15:u|w3~7, A9, cffa_core_v15:u|nC800_FF, RW, nIOSTRB, nIOSEL, cffa_core_v15:u|we_en, cffa_core_v15:u|w2, A10                 ; cffa_core_v15:u|nWE~5, cffa_core_v15:u|la0                                                                                                                                                                                                                                     ;
+;  A  ; LC5        ; cffa_core_v15:u|la0, cffa_core_v15:u|w3, RW, nIOSTRB, nIOSEL, cffa_core_v15:u|we_en, cffa_core_v15:u|w1, A8, cffa_core_v15:u|nC800_FF, A9, A10 ; nWE                                                                                                                                                                                                                                                                            ;
+;  A  ; LC7        ; A8, cffa_core_v15:u|nC800_FF, RW, nIOSTRB, nIOSEL, cffa_core_v15:u|we_en, cffa_core_v15:u|w1                                                   ; cffa_core_v15:u|w2                                                                                                                                                                                                                                                             ;
+;  A  ; LC1        ; A8, cffa_core_v15:u|nC800_FF, RW, nIOSTRB, nIOSEL, cffa_core_v15:u|we_en, cffa_core_v15:u|w2                                                   ; cffa_core_v15:u|w3                                                                                                                                                                                                                                                             ;
+;  C  ; LC36       ; RW                                                                                                                                             ; NOT_RW                                                                                                                                                                                                                                                                         ;
+;  C  ; LC40       ; CLK7M, A2, nDEVSEL                                                                                                                             ; LA2, cffa_core_v15:u|nW_ATA~0, cffa_core_v15:u|we_en, cffa_core_v15:u|R_ATA~5, cffa_core_v15:u|nIOWR~1, cffa_core_v15:u|nIORD~1, cffa_core_v15:u|nR_HOST~0, cffa_core_v15:u|bk14, cffa_core_v15:u|W_HOST~3, cffa_core_v15:u|cs_mask, cffa_core_v15:u|nCS1~2                    ;
+;  C  ; LC41       ; nIOSTRB, cffa_core_v15:u|nC800_FF, nIOSEL                                                                                                      ; nEPROM_EN                                                                                                                                                                                                                                                                      ;
+;  C  ; LC46       ; cffa_core_v15:u|la1, cffa_core_v15:u|la3, cffa_core_v15:u|la2, cffa_core_v15:u|la0, RW, nDEVSEL                                                ; nR_HOST                                                                                                                                                                                                                                                                        ;
+;  C  ; LC37       ; CLK7M, RW, cffa_core_v15:u|la2, cffa_core_v15:u|la1, nDEVSEL, cffa_core_v15:u|la3, cffa_core_v15:u|la0                                         ; BK14                                                                                                                                                                                                                                                                           ;
+;  C  ; LC35       ; nDEVSEL, nIOSEL, nIOSTRB, cffa_core_v15:u|nC800_FF                                                                                             ; nDBUS245                                                                                                                                                                                                                                                                       ;
+;  D  ; LC50       ; CLK7M, cffa_core_v15:u|dsel1                                                                                                                   ; cffa_core_v15:u|nIOWR~1                                                                                                                                                                                                                                                        ;
+;  D  ; LC52       ; RW, cffa_core_v15:u|la3, cffa_core_v15:u|dsel1, cffa_core_v15:u|la1, cffa_core_v15:u|la2, cffa_core_v15:u|la0                                  ; nW_ATA                                                                                                                                                                                                                                                                         ;
+;  D  ; LC49       ; cffa_core_v15:u|la3, cffa_core_v15:u|dsel1, cffa_core_v15:u|la1, cffa_core_v15:u|la2, cffa_core_v15:u|la0, RW, nDEVSEL                         ; R_ATA                                                                                                                                                                                                                                                                          ;
+;  D  ; LC53       ; cffa_core_v15:u|la1, cffa_core_v15:u|la3, cffa_core_v15:u|la2, cffa_core_v15:u|la0, cffa_core_v15:u|dsel2, RW, nDEVSEL                         ; nIOWR                                                                                                                                                                                                                                                                          ;
+;  D  ; LC57       ; cffa_core_v15:u|la1, cffa_core_v15:u|la3, cffa_core_v15:u|la2, cffa_core_v15:u|la0, cffa_core_v15:u|dsel1, RW, nDEVSEL                         ; nIORD                                                                                                                                                                                                                                                                          ;
+;  D  ; LC51       ; cffa_core_v15:u|la1, cffa_core_v15:u|la3, cffa_core_v15:u|la2, cffa_core_v15:u|la0, cffa_core_v15:u|dsel1, RW, nDEVSEL                         ; W_HOST                                                                                                                                                                                                                                                                         ;
+;  D  ; LC56       ; CLK7M, nDEVSEL, cffa_core_v15:u|la1, cffa_core_v15:u|la3, cffa_core_v15:u|la2, cffa_core_v15:u|la0, cffa_core_v15:u|cs_mask                    ; cffa_core_v15:u|cs_mask, cffa_core_v15:u|nCS0~5, cffa_core_v15:u|nCS1~2                                                                                                                                                                                                        ;
+;  D  ; LC62       ; nDEVSEL, cffa_core_v15:u|dsel1, RW, cffa_core_v15:u|cs_mask, cffa_core_v15:u|la3                                                               ; nCS0                                                                                                                                                                                                                                                                           ;
+;  D  ; LC64       ; nDEVSEL, cffa_core_v15:u|dsel1, RW, cffa_core_v15:u|cs_mask, cffa_core_v15:u|la3, cffa_core_v15:u|la2, cffa_core_v15:u|la1                     ; nCS1                                                                                                                                                                                                                                                                           ;
++-----+------------+------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
++---------------------------------------------------------------+
+; Fitter Device Options                                         ;
++----------------------------------------------+----------------+
+; Option                                       ; Setting        ;
++----------------------------------------------+----------------+
+; Enable user-supplied start-up clock (CLKUSR) ; Off            ;
+; Enable device-wide reset (DEV_CLRn)          ; Off            ;
+; Enable device-wide output enable (DEV_OE)    ; Off            ;
+; Enable INIT_DONE output                      ; Off            ;
+; Configuration scheme                         ; Passive Serial ;
+; Security bit                                 ; Off            ;
+; Base pin-out file on sameframe device        ; Off            ;
++----------------------------------------------+----------------+
+
+
++-----------------+
+; Fitter Messages ;
++-----------------+
+Warning (20028): Parallel compilation is not licensed and has been disabled
+Info (119006): Selected device EPM7064SLC44-10 for design "cffa12_v151"
+Info: Quartus II 32-bit Fitter was successful. 0 errors, 1 warning
+    Info: Peak virtual memory: 347 megabytes
+    Info: Processing ended: Fri Nov 20 07:05:17 2026
+    Info: Elapsed time: 00:00:01
+    Info: Total CPU time (on all processors): 00:00:01
+
+

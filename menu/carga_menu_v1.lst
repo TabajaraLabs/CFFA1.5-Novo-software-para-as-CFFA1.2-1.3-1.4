@@ -1,0 +1,763 @@
+ca65 V2.18 - Ubuntu 2.19-1
+Main file   : carga_menu_v1.s
+Current file: carga_menu_v1.s
+
+000000r 1               ; carga_menu_v1.s - estagio 1 do banco 0 da CFFA v1.2 (firmware 1.4): carrega CFFAMENU.BIN do cartao FAT
+000000r 1               ; Tabajara Labs, 2026-11-20. O trampolim do 1.4 copia o banco 0 ($C800-$CEFF) para $2000-$26FF e chama $2003.
+000000r 1               ; Procura CFFAMENU.BIN na raiz (FAT16/FAT32), carrega em $4000 (ate 16 KB) seguindo a cadeia de clusters,
+000000r 1               ; confere "CFM1" em $4000 e chama $4004 (X = $70). Sem o arquivo, mostra um aviso e segue o boot.
+000000r 1               ; O fim do banco ($CEC0-$CEEC) guarda os nomes das imagens montadas (gravados pelo CFFAMENU).
+000000r 1               ; Montar: ca65 --cpu 65C02 carga_menu_v1.s && ld65 -t none -S $2000 carga_menu_v1.o -o carga_menu_v1.bin (1792 bytes)
+000000r 1                       .setcpu "65C02"
+000000r 1                       .org $2000
+002000  1               SLOT    = 7
+002000  1               IOB     = $C080 + SLOT*16
+002000  1               DATAH   = IOB+0
+002000  1               DATAL   = IOB+8
+002000  1               ERRREG  = IOB+9
+002000  1               SECCNT  = IOB+10
+002000  1               SECT    = IOB+11
+002000  1               CYL     = IOB+12
+002000  1               CYLH    = IOB+13
+002000  1               HEAD    = IOB+14
+002000  1               CMD     = IOB+15
+002000  1               STATUS  = IOB+15
+002000  1               WUNL    = IOB+3                 ; CPLD v1.6: escrever = destrava gravacao; ler = trava
+002000  1               BK0     = IOB+4                 ; qualquer acesso: banco 0
+002000  1               BK4     = IOB+5                 ; qualquer acesso: banco 4
+002000  1               DRVRST  = $0478 + SLOT          ; DriveResetDone do driver (zerar = refazer FatInit)
+002000  1               
+002000  1               COUT    = $FDED
+002000  1               CROUT   = $FD8E
+002000  1               PRBYTE  = $FDDA
+002000  1               HOME    = $FC58
+002000  1               RDKEY   = $FD0C
+002000  1               WAIT    = $FCA8
+002000  1               KBD     = $C000
+002000  1               KBDSTRB = $C010
+002000  1               
+002000  1               ROMCFG  = $CE80                 ; tabela do driver no banco 4 ($CE80-$CEE0, $CEE0 = 'C')
+002000  1               CFGLEN  = $61
+002000  1               ROMNAM  = $CEC0                 ; nomes no banco 0 ($CEC0-$CEEC, $CEEC = 'N')
+002000  1               NAMLEN  = 45
+002000  1               
+002000  1               PTR     = $06
+002000  1               ENT     = $08
+002000  1               CP      = $EB                   ; ponteiro de trabalho (tabela nova)
+002000  1               MP      = $FA
+002000  1               TMP     = $FC
+002000  1               CNT     = $FD
+002000  1               LP      = $FE                   ; ponteiro para a entrada da lista de imagens
+002000  1               
+002000  1               SBUF    = $2800
+002000  1               FATB    = $2A00
+002000  1               V       = $2C00
+002000  1               LST     = $8D00                 ; 16 imagens x 24 bytes: nome 11, bytes 20-21 e 26-31 da entrada (8), LBA do dir (4), indice (1)
+002000  1               NEWCFG  = $8E80                 ; tabela nova (97 bytes)
+002000  1               NEWNAM  = $8F00                 ; nomes novos (45 bytes)
+002000  1               OLD     = $8F40                 ; copia de uma entrada da tabela (24 bytes)
+002000  1               
+002000  1               vLBA    = 0
+002000  1               vPST    = 4
+002000  1               vFATST  = 8
+002000  1               vROOTST = 12
+002000  1               vDATAST = 16
+002000  1               vROOTCL = 20
+002000  1               vFATSZ  = 24
+002000  1               vT1     = 28
+002000  1               vCLUS   = 32
+002000  1               vFCACHE = 36
+002000  1               vDIRL   = 40
+002000  1               vFCL    = 44
+002000  1               vFSZ    = 48
+002000  1               vNCL    = 52
+002000  1               vT2     = 56
+002000  1               vNXT    = 60
+002000  1               vDCL    = 64
+002000  1               SPCV    = V+68
+002000  1               SPSH    = V+69
+002000  1               NFAT    = V+70
+002000  1               FTYP    = V+71
+002000  1               RSECS   = V+72
+002000  1               SLEFT   = V+74
+002000  1               CVAL    = V+75
+002000  1               NIMG    = V+76
+002000  1               FRAG    = V+77
+002000  1               FOFS    = V+78
+002000  1               SAVSP   = V+80
+002000  1               ESZ     = V+81
+002000  1               FORCE   = V+82
+002000  1               DRV     = V+83
+002000  1               SEL     = V+84
+002000  1               BANKS   = V+85
+002000  1               
+002000  1               
+002000  1               DSTPG   = V+86
+002000  1               REM     = V+87                  ; setores que faltam (16 bits)
+002000  1               
+002000  1  43 46 55             .byte "CFU"
+002003  1  E0 70                cpx #SLOT*16            ; $2003
+002005  1  F0 01                beq @ok
+002007  1  60                   rts
+002008  1  BA           @ok:    tsx
+002009  1  8E 50 2C             stx SAVSP
+00200C  1  9C 4B 2C             stz CVAL
+00200F  1  20 40 21             jsr fsinit
+002012  1  B0 3A                bcs @out                ; (o driver ja disse que e FAT; nao deveria acontecer)
+002014  1  20 79 22             jsr scan
+002017  1  AD 4C 2C             lda NIMG
+00201A  1  D0 33                bne @load
+00201C  1  20 98 25             jsr msg
+00201F  1  43 46 46 41          .byte "CFFA: CFFAMENU.BIN NAO ENCONTRADO",0
+002023  1  3A 20 43 46  
+002027  1  46 41 4D 45  
+002041  1  20 8E FD             jsr CROUT
+002044  1  A2 08                ldx #8
+002046  1  A9 FF        @w:     lda #$FF
+002048  1  20 A8 FC             jsr WAIT
+00204B  1  CA                   dex
+00204C  1  D0 F8                bne @w
+00204E  1  60           @out:   rts
+00204F  1  20 FC 20     @load:  jsr load
+002052  1  A2 03                ldx #3
+002054  1  BD 00 40     @sig:   lda $4000,x
+002057  1  DD 86 20             cmp sig,x
+00205A  1  D0 08                bne @bad
+00205C  1  CA                   dex
+00205D  1  10 F5                bpl @sig
+00205F  1  A2 70                ldx #SLOT*16
+002061  1  4C 04 40             jmp $4004
+002064  1  20 98 25     @bad:   jsr msg
+002067  1  43 46 46 41          .byte "CFFA: CFFAMENU.BIN INVALIDO",0
+00206B  1  3A 20 43 46  
+00206F  1  46 41 4D 45  
+002083  1  4C 8E FD             jmp CROUT
+002086  1  43 46 4D 31  sig:    .byte "CFM1"
+00208A  1  43 46 46 41  fname:  .byte "CFFAMENUBIN"
+00208E  1  4D 45 4E 55  
+002092  1  42 49 4E     
+002095  1               
+002095  1               ; entry: confere se a entrada (ENT) e CFFAMENU.BIN; se for, guarda cluster e tamanho e encerra a busca
+002095  1  A0 0B        entry:  ldy #11
+002097  1  B1 08                lda (ENT),y
+002099  1  29 18                and #$18                ; pasta / rotulo (o nome longo tem atributo $0F: tambem cai aqui)
+00209B  1  D0 5E                bne @x
+00209D  1  A0 0A                ldy #10
+00209F  1  B1 08        @c:     lda (ENT),y
+0020A1  1  D9 8A 20             cmp fname,y
+0020A4  1  D0 55                bne @x
+0020A6  1  88                   dey
+0020A7  1  10 F6                bpl @c
+0020A9  1  A0 1A                ldy #$1A
+0020AB  1  B1 08                lda (ENT),y
+0020AD  1  8D 2C 2C             sta V+vFCL
+0020B0  1  C8                   iny
+0020B1  1  B1 08                lda (ENT),y
+0020B3  1  8D 2D 2C             sta V+vFCL+1
+0020B6  1  9C 2E 2C             stz V+vFCL+2
+0020B9  1  9C 2F 2C             stz V+vFCL+3
+0020BC  1  AD 47 2C             lda FTYP
+0020BF  1  F0 0D                beq @s
+0020C1  1  A0 14                ldy #$14
+0020C3  1  B1 08                lda (ENT),y
+0020C5  1  8D 2E 2C             sta V+vFCL+2
+0020C8  1  C8                   iny
+0020C9  1  B1 08                lda (ENT),y
+0020CB  1  8D 2F 2C             sta V+vFCL+3
+0020CE  1  A0 1F        @s:     ldy #$1F                ; setores = (tamanho + 511) / 512, no maximo 32 (16 KB)
+0020D0  1  B1 08                lda (ENT),y
+0020D2  1  88                   dey
+0020D3  1  11 08                ora (ENT),y
+0020D5  1  D0 18                bne @max                ; >= 64 KB
+0020D7  1  88                   dey
+0020D8  1  B1 08                lda (ENT),y
+0020DA  1  4A                   lsr
+0020DB  1  8D 57 2C             sta REM
+0020DE  1  B0 05                bcs @inc                ; sobra no bit 8
+0020E0  1  88                   dey
+0020E1  1  B1 08                lda (ENT),y
+0020E3  1  F0 03                beq @ok2
+0020E5  1  EE 57 2C     @inc:   inc REM
+0020E8  1  AD 57 2C     @ok2:   lda REM
+0020EB  1  C9 21                cmp #33
+0020ED  1  90 05                bcc @fim
+0020EF  1  A9 20        @max:   lda #32
+0020F1  1  8D 57 2C             sta REM
+0020F4  1  EE 4C 2C     @fim:   inc NIMG
+0020F7  1  68                   pla                     ; descarta o retorno para o dirsec: o RTS abaixo sai do dirsec
+0020F8  1  68                   pla                     ; com C=1 e o scan termina
+0020F9  1  38                   sec
+0020FA  1  60                   rts
+0020FB  1  60           @x:     rts
+0020FC  1               
+0020FC  1               ; load: le REM setores da cadeia de clusters que comeca em vFCL para $4000...
+0020FC  1  A9 40        load:   lda #$40
+0020FE  1  8D 56 2C             sta DSTPG
+002101  1  A2 20                ldx #vCLUS
+002103  1  A0 2C                ldy #vFCL
+002105  1  20 61 24             jsr cpy32
+002108  1  20 1D 23     @cl:    jsr c2l
+00210B  1  AD 44 2C             lda SPCV
+00210E  1  8D 4A 2C             sta SLEFT
+002111  1  AD 56 2C     @sec:   lda DSTPG
+002114  1  20 15 25             jsr rdsec
+002117  1  90 03                bcc @r
+002119  1  4C B6 25             jmp ioerr
+00211C  1  EE 56 2C     @r:     inc DSTPG
+00211F  1  EE 56 2C             inc DSTPG
+002122  1  CE 57 2C             dec REM
+002125  1  F0 18                beq @done
+002127  1  A2 00                ldx #vLBA
+002129  1  20 A0 24             jsr inc32
+00212C  1  CE 4A 2C             dec SLEFT
+00212F  1  D0 E0                bne @sec
+002131  1  20 5C 23             jsr fatnext
+002134  1  B0 09                bcs @done
+002136  1  A2 20                ldx #vCLUS
+002138  1  A0 3C                ldy #vNXT
+00213A  1  20 61 24             jsr cpy32
+00213D  1  80 C9                bra @cl
+00213F  1  60           @done:  rts
+002140  1               ; ============================================================================
+002140  1               ; fsinit: le MBR/VBR e o BPB. C=1 se nao for FAT16/FAT32
+002140  1  A2 00        fsinit: ldx #vLBA
+002142  1  20 54 24             jsr zero32
+002145  1  A2 04                ldx #vPST
+002147  1  20 54 24             jsr zero32
+00214A  1  20 13 25             jsr rdsec_s
+00214D  1  B0 20                bcs @no
+00214F  1  AD FE 29             lda SBUF+$1FE
+002152  1  C9 55                cmp #$55
+002154  1  D0 19                bne @no
+002156  1  AD FF 29             lda SBUF+$1FF
+002159  1  C9 AA                cmp #$AA
+00215B  1  D0 12                bne @no
+00215D  1  20 55 22             jsr isvbr
+002160  1  90 27                bcc @parse
+002162  1  AD C2 29             lda SBUF+$1C2
+002165  1  A2 05                ldx #5
+002167  1  DD 4F 22     @tp:    cmp fattypes,x
+00216A  1  F0 05                beq @ok
+00216C  1  CA                   dex
+00216D  1  10 F8                bpl @tp
+00216F  1  38           @no:    sec
+002170  1  60                   rts
+002171  1  A2 03        @ok:    ldx #3
+002173  1  BD C6 29     @cp:    lda SBUF+$1C6,x
+002176  1  9D 04 2C             sta V+vPST,x
+002179  1  9D 00 2C             sta V+vLBA,x
+00217C  1  CA                   dex
+00217D  1  10 F4                bpl @cp
+00217F  1  20 13 25             jsr rdsec_s
+002182  1  B0 EB                bcs @no
+002184  1  20 55 22             jsr isvbr
+002187  1  B0 E6                bcs @no
+002189  1  AD 0D 28     @parse: lda SBUF+$0D
+00218C  1  8D 44 2C             sta SPCV
+00218F  1  A2 00                ldx #0
+002191  1  4A           @sh:    lsr
+002192  1  B0 05                bcs @shd
+002194  1  E8                   inx
+002195  1  E0 08                cpx #8
+002197  1  D0 F8                bne @sh
+002199  1  8E 45 2C     @shd:   stx SPSH
+00219C  1  AD 10 28             lda SBUF+$10
+00219F  1  8D 46 2C             sta NFAT
+0021A2  1  A2 1C                ldx #vT1
+0021A4  1  20 54 24             jsr zero32
+0021A7  1  AD 0E 28             lda SBUF+$0E
+0021AA  1  8D 1C 2C             sta V+vT1
+0021AD  1  AD 0F 28             lda SBUF+$0F
+0021B0  1  8D 1D 2C             sta V+vT1+1
+0021B3  1  A2 08                ldx #vFATST
+0021B5  1  A0 04                ldy #vPST
+0021B7  1  20 61 24             jsr cpy32
+0021BA  1  A0 1C                ldy #vT1
+0021BC  1  20 7A 24             jsr add32
+0021BF  1  A2 18                ldx #vFATSZ
+0021C1  1  20 54 24             jsr zero32
+0021C4  1  AD 16 28             lda SBUF+$16
+0021C7  1  0D 17 28             ora SBUF+$17
+0021CA  1  F0 1D                beq @f32
+0021CC  1  AD 3A 28             lda SBUF+$3A            ; "FAT12" recusada
+0021CF  1  C9 32                cmp #'2'
+0021D1  1  F0 9C                beq @no
+0021D3  1  9C 47 2C             stz FTYP
+0021D6  1  A9 02                lda #2
+0021D8  1  8D 51 2C             sta ESZ
+0021DB  1  AD 16 28             lda SBUF+$16
+0021DE  1  8D 18 2C             sta V+vFATSZ
+0021E1  1  AD 17 28             lda SBUF+$17
+0021E4  1  8D 19 2C             sta V+vFATSZ+1
+0021E7  1  80 1B                bra @fz
+0021E9  1  A9 01        @f32:   lda #1
+0021EB  1  8D 47 2C             sta FTYP
+0021EE  1  A9 04                lda #4
+0021F0  1  8D 51 2C             sta ESZ
+0021F3  1  A2 03                ldx #3
+0021F5  1  BD 24 28     @c32:   lda SBUF+$24,x
+0021F8  1  9D 18 2C             sta V+vFATSZ,x
+0021FB  1  BD 2C 28             lda SBUF+$2C,x
+0021FE  1  9D 14 2C             sta V+vROOTCL,x
+002201  1  CA                   dex
+002202  1  10 F1                bpl @c32
+002204  1  A2 0C        @fz:    ldx #vROOTST
+002206  1  A0 08                ldy #vFATST
+002208  1  20 61 24             jsr cpy32
+00220B  1  AD 46 2C             lda NFAT
+00220E  1  85 FD                sta CNT
+002210  1  A0 18        @nf:    ldy #vFATSZ
+002212  1  20 7A 24             jsr add32
+002215  1  C6 FD                dec CNT
+002217  1  D0 F7                bne @nf
+002219  1  A2 1C                ldx #vT1
+00221B  1  20 54 24             jsr zero32
+00221E  1  AD 11 28             lda SBUF+$11
+002221  1  8D 1C 2C             sta V+vT1
+002224  1  AD 12 28             lda SBUF+$12
+002227  1  8D 1D 2C             sta V+vT1+1
+00222A  1  A0 04                ldy #4
+00222C  1  4E 1D 2C     @d16:   lsr V+vT1+1
+00222F  1  6E 1C 2C             ror V+vT1
+002232  1  88                   dey
+002233  1  D0 F7                bne @d16
+002235  1  AD 1C 2C             lda V+vT1
+002238  1  8D 48 2C             sta RSECS
+00223B  1  AD 1D 2C             lda V+vT1+1
+00223E  1  8D 49 2C             sta RSECS+1
+002241  1  A2 10                ldx #vDATAST
+002243  1  A0 0C                ldy #vROOTST
+002245  1  20 61 24             jsr cpy32
+002248  1  A0 1C                ldy #vT1
+00224A  1  20 7A 24             jsr add32
+00224D  1  18                   clc
+00224E  1  60                   rts
+00224F  1  04 06 0E 0B  fattypes: .byte $04,$06,$0E,$0B,$0C,$01
+002253  1  0C 01        
+002255  1               
+002255  1  AD 00 28     isvbr:  lda SBUF
+002258  1  C9 EB                cmp #$EB
+00225A  1  F0 04                beq @j
+00225C  1  C9 E9                cmp #$E9
+00225E  1  D0 17                bne @no
+002260  1  AD 0B 28     @j:     lda SBUF+$0B
+002263  1  D0 12                bne @no
+002265  1  AD 0C 28             lda SBUF+$0C
+002268  1  C9 02                cmp #2
+00226A  1  D0 0B                bne @no
+00226C  1  AD 10 28             lda SBUF+$10
+00226F  1  F0 06                beq @no
+002271  1  C9 03                cmp #3
+002273  1  B0 02                bcs @no
+002275  1  18                   clc
+002276  1  60                   rts
+002277  1  38           @no:    sec
+002278  1  60                   rts
+002279  1               
+002279  1               ; ============================================================================
+002279  1               ; scan: percorre o diretorio raiz e guarda as imagens em LST (ate 16)
+002279  1  9C 4C 2C     scan:   stz NIMG             ; (NIMG = 1 quando achar o arquivo)
+00227C  1  AD 47 2C             lda FTYP
+00227F  1  D0 26                bne @d32
+002281  1  A2 28                ldx #vDIRL
+002283  1  A0 0C                ldy #vROOTST
+002285  1  20 61 24             jsr cpy32
+002288  1  AD 48 2C     @ds:    lda RSECS
+00228B  1  0D 49 2C             ora RSECS+1
+00228E  1  F0 59                beq @end
+002290  1  20 EA 22             jsr dirsec
+002293  1  B0 54                bcs @end
+002295  1  A2 28                ldx #vDIRL
+002297  1  20 A0 24             jsr inc32
+00229A  1  AD 48 2C             lda RSECS
+00229D  1  D0 03                bne @dd
+00229F  1  CE 49 2C             dec RSECS+1
+0022A2  1  CE 48 2C     @dd:    dec RSECS
+0022A5  1  80 E1                bra @ds
+0022A7  1  A2 40        @d32:   ldx #vDCL
+0022A9  1  A0 14                ldy #vROOTCL
+0022AB  1  20 61 24             jsr cpy32
+0022AE  1  A2 20        @dc:    ldx #vCLUS
+0022B0  1  A0 40                ldy #vDCL
+0022B2  1  20 61 24             jsr cpy32
+0022B5  1  20 1D 23             jsr c2l
+0022B8  1  A2 28                ldx #vDIRL
+0022BA  1  A0 00                ldy #vLBA
+0022BC  1  20 61 24             jsr cpy32
+0022BF  1  AD 44 2C             lda SPCV
+0022C2  1  8D 4A 2C             sta SLEFT
+0022C5  1  20 EA 22     @dsc:   jsr dirsec
+0022C8  1  B0 1F                bcs @end
+0022CA  1  A2 28                ldx #vDIRL
+0022CC  1  20 A0 24             jsr inc32
+0022CF  1  CE 4A 2C             dec SLEFT
+0022D2  1  D0 F1                bne @dsc
+0022D4  1  A2 20                ldx #vCLUS
+0022D6  1  A0 40                ldy #vDCL
+0022D8  1  20 61 24             jsr cpy32
+0022DB  1  20 5C 23             jsr fatnext
+0022DE  1  B0 09                bcs @end
+0022E0  1  A2 40                ldx #vDCL
+0022E2  1  A0 3C                ldy #vNXT
+0022E4  1  20 61 24             jsr cpy32
+0022E7  1  80 C5                bra @dc
+0022E9  1  60           @end:   rts
+0022EA  1               
+0022EA  1  A2 00        dirsec: ldx #vLBA
+0022EC  1  A0 28                ldy #vDIRL
+0022EE  1  20 61 24             jsr cpy32
+0022F1  1  20 13 25             jsr rdsec_s
+0022F4  1  90 03                bcc @ok
+0022F6  1  4C B6 25             jmp ioerr
+0022F9  1  A9 00        @ok:    lda #<SBUF
+0022FB  1  85 08                sta ENT
+0022FD  1  A9 28                lda #>SBUF
+0022FF  1  85 09                sta ENT+1
+002301  1  B2 08        @e:     lda (ENT)
+002303  1  D0 02                bne @nz
+002305  1  38                   sec
+002306  1  60                   rts
+002307  1  20 95 20     @nz:    jsr entry
+00230A  1  18                   clc
+00230B  1  A5 08                lda ENT
+00230D  1  69 20                adc #32
+00230F  1  85 08                sta ENT
+002311  1  90 EE                bcc @e
+002313  1  E6 09                inc ENT+1
+002315  1  A5 09                lda ENT+1
+002317  1  C9 2A                cmp #>(SBUF+512)
+002319  1  D0 E6                bne @e
+00231B  1  18                   clc
+00231C  1  60                   rts
+00231D  1               
+00231D  1               
+00231D  1               ; c2l: vLBA = DATAST + (vCLUS - 2) << SPSH
+00231D  1  A2 1C        c2l:    ldx #vT1
+00231F  1  A0 20                ldy #vCLUS
+002321  1  20 61 24             jsr cpy32
+002324  1  38                   sec                     ; T1 = CLUS - 2 (sem CPY no meio: preserva o carry)
+002325  1  AD 1C 2C             lda V+vT1
+002328  1  E9 02                sbc #2
+00232A  1  8D 1C 2C             sta V+vT1
+00232D  1  AD 1D 2C             lda V+vT1+1
+002330  1  E9 00                sbc #0
+002332  1  8D 1D 2C             sta V+vT1+1
+002335  1  AD 1E 2C             lda V+vT1+2
+002338  1  E9 00                sbc #0
+00233A  1  8D 1E 2C             sta V+vT1+2
+00233D  1  AD 1F 2C             lda V+vT1+3
+002340  1  E9 00                sbc #0
+002342  1  8D 1F 2C             sta V+vT1+3
+002345  1  AC 45 2C             ldy SPSH
+002348  1  F0 06                beq @a
+00234A  1  20 CF 24     @s:     jsr shl32
+00234D  1  88                   dey
+00234E  1  D0 FA                bne @s
+002350  1  A2 00        @a:     ldx #vLBA
+002352  1  A0 10                ldy #vDATAST
+002354  1  20 61 24             jsr cpy32
+002357  1  A0 1C                ldy #vT1
+002359  1  4C 7A 24             jmp add32
+00235C  1               
+00235C  1               ; fatnext: vNXT = FAT[vCLUS]; C=1 se fim de cadeia (EOC), cluster livre ou invalido.
+00235C  1               ; Em erro de leitura: sai pelo ioerr.
+00235C  1               fatnext:
+00235C  1                       ; T2 = indice do setor na FAT; PTR = FATB + deslocamento
+00235C  1  A2 38                ldx #vT2
+00235E  1  A0 20                ldy #vCLUS
+002360  1  20 61 24             jsr cpy32
+002363  1  AD 47 2C             lda FTYP
+002366  1  D0 24                bne @f32
+002368  1                       ; FAT16: setor = CLUS>>8, desloc = (CLUS & $FF)*2
+002368  1  AD 39 2C             lda V+vT2+1
+00236B  1  8D 38 2C             sta V+vT2
+00236E  1  AD 3A 2C             lda V+vT2+2
+002371  1  8D 39 2C             sta V+vT2+1
+002374  1  AD 3B 2C             lda V+vT2+3
+002377  1  8D 3A 2C             sta V+vT2+2
+00237A  1  9C 3B 2C             stz V+vT2+3
+00237D  1  AD 20 2C             lda V+vCLUS
+002380  1  0A                   asl
+002381  1  8D 4E 2C             sta FOFS
+002384  1  A9 00                lda #0
+002386  1  2A                   rol
+002387  1  8D 4F 2C             sta FOFS+1
+00238A  1  80 21                bra @rd
+00238C  1               @f32:   ; FAT32: setor = CLUS>>7, desloc = (CLUS & $7F)*4
+00238C  1  AD 20 2C             lda V+vCLUS
+00238F  1  29 7F                and #$7F
+002391  1  0A                   asl
+002392  1  0A                   asl
+002393  1  8D 4E 2C             sta FOFS
+002396  1  A9 00                lda #0
+002398  1  2A                   rol
+002399  1  8D 4F 2C             sta FOFS+1
+00239C  1  A0 07                ldy #7
+00239E  1  4E 3B 2C     @sr:    lsr V+vT2+3
+0023A1  1  6E 3A 2C             ror V+vT2+2
+0023A4  1  6E 39 2C             ror V+vT2+1
+0023A7  1  6E 38 2C             ror V+vT2
+0023AA  1  88                   dey
+0023AB  1  D0 F1                bne @sr
+0023AD  1  A2 00        @rd:    ldx #vLBA
+0023AF  1  A0 08                ldy #vFATST
+0023B1  1  20 61 24             jsr cpy32
+0023B4  1  A0 38                ldy #vT2
+0023B6  1  20 7A 24             jsr add32
+0023B9  1  AD 4B 2C             lda CVAL
+0023BC  1  F0 09                beq @load
+0023BE  1  A2 00                ldx #vLBA
+0023C0  1  A0 24                ldy #vFCACHE
+0023C2  1  20 DC 24             jsr cmp32
+0023C5  1  F0 16                beq @have
+0023C7  1  A9 2A        @load:  lda #>FATB
+0023C9  1  20 15 25             jsr rdsec
+0023CC  1  90 03                bcc @ld
+0023CE  1  4C B6 25             jmp ioerr
+0023D1  1  A2 24        @ld:    ldx #vFCACHE
+0023D3  1  A0 00                ldy #vLBA
+0023D5  1  20 61 24             jsr cpy32
+0023D8  1  A9 01                lda #1
+0023DA  1  8D 4B 2C             sta CVAL
+0023DD  1  AD 4E 2C     @have:  lda FOFS
+0023E0  1  85 06                sta PTR
+0023E2  1  A9 2A                lda #>FATB
+0023E4  1  18                   clc
+0023E5  1  6D 4F 2C             adc FOFS+1
+0023E8  1  85 07                sta PTR+1
+0023EA  1  A2 3C                ldx #vNXT
+0023EC  1  20 54 24             jsr zero32
+0023EF  1  A0 00                ldy #0
+0023F1  1  B1 06                lda (PTR),y
+0023F3  1  8D 3C 2C             sta V+vNXT
+0023F6  1  C8                   iny
+0023F7  1  B1 06                lda (PTR),y
+0023F9  1  8D 3D 2C             sta V+vNXT+1
+0023FC  1  AD 47 2C             lda FTYP
+0023FF  1  D0 1C                bne @e32
+002401  1                       ; FAT16: >= $FFF8 fim; < 2 invalido
+002401  1  AD 3D 2C             lda V+vNXT+1
+002404  1  C9 FF                cmp #$FF
+002406  1  D0 07                bne @lo16
+002408  1  AD 3C 2C             lda V+vNXT
+00240B  1  C9 F8                cmp #$F8
+00240D  1  B0 43                bcs @eoc
+00240F  1  AD 3D 2C     @lo16:  lda V+vNXT+1
+002412  1  D0 07                bne @ok
+002414  1  AD 3C 2C             lda V+vNXT
+002417  1  C9 02                cmp #2
+002419  1  90 37                bcc @eoc
+00241B  1  18           @ok:    clc
+00241C  1  60                   rts
+00241D  1  C8           @e32:   iny
+00241E  1  B1 06                lda (PTR),y
+002420  1  8D 3E 2C             sta V+vNXT+2
+002423  1  C8                   iny
+002424  1  B1 06                lda (PTR),y
+002426  1  29 0F                and #$0F
+002428  1  8D 3F 2C             sta V+vNXT+3
+00242B  1  C9 0F                cmp #$0F
+00242D  1  D0 11                bne @lo32
+00242F  1  AD 3E 2C             lda V+vNXT+2
+002432  1  2D 3D 2C             and V+vNXT+1
+002435  1  C9 FF                cmp #$FF
+002437  1  D0 07                bne @lo32
+002439  1  AD 3C 2C             lda V+vNXT
+00243C  1  C9 F8                cmp #$F8
+00243E  1  B0 12                bcs @eoc
+002440  1  AD 3F 2C     @lo32:  lda V+vNXT+3
+002443  1  0D 3E 2C             ora V+vNXT+2
+002446  1  0D 3D 2C             ora V+vNXT+1
+002449  1  D0 D0                bne @ok
+00244B  1  AD 3C 2C             lda V+vNXT
+00244E  1  C9 02                cmp #2
+002450  1  B0 C9                bcs @ok
+002452  1  38           @eoc:   sec
+002453  1  60                   rts
+002454  1               
+002454  1               ; ============================================================================
+002454  1               ; aritmetica de 32 bits sobre V (X = destino, Y = origem; deslocamentos)
+002454  1  9E 00 2C     zero32: stz V,x
+002457  1  9E 01 2C             stz V+1,x
+00245A  1  9E 02 2C             stz V+2,x
+00245D  1  9E 03 2C             stz V+3,x
+002460  1  60                   rts
+002461  1  B9 00 2C     cpy32:  lda V,y
+002464  1  9D 00 2C             sta V,x
+002467  1  B9 01 2C             lda V+1,y
+00246A  1  9D 01 2C             sta V+1,x
+00246D  1  B9 02 2C             lda V+2,y
+002470  1  9D 02 2C             sta V+2,x
+002473  1  B9 03 2C             lda V+3,y
+002476  1  9D 03 2C             sta V+3,x
+002479  1  60                   rts
+00247A  1  18           add32:  clc
+00247B  1  BD 00 2C             lda V,x
+00247E  1  79 00 2C             adc V,y
+002481  1  9D 00 2C             sta V,x
+002484  1  BD 01 2C             lda V+1,x
+002487  1  79 01 2C             adc V+1,y
+00248A  1  9D 01 2C             sta V+1,x
+00248D  1  BD 02 2C             lda V+2,x
+002490  1  79 02 2C             adc V+2,y
+002493  1  9D 02 2C             sta V+2,x
+002496  1  BD 03 2C             lda V+3,x
+002499  1  79 03 2C             adc V+3,y
+00249C  1  9D 03 2C             sta V+3,x
+00249F  1  60                   rts
+0024A0  1  FE 00 2C     inc32:  inc V,x
+0024A3  1  D0 0D                bne @r
+0024A5  1  FE 01 2C             inc V+1,x
+0024A8  1  D0 08                bne @r
+0024AA  1  FE 02 2C             inc V+2,x
+0024AD  1  D0 03                bne @r
+0024AF  1  FE 03 2C             inc V+3,x
+0024B2  1  60           @r:     rts
+0024B3  1  BD 00 2C     dec32:  lda V,x
+0024B6  1  D0 13                bne @a
+0024B8  1  BD 01 2C             lda V+1,x
+0024BB  1  D0 0B                bne @b
+0024BD  1  BD 02 2C             lda V+2,x
+0024C0  1  D0 03                bne @c
+0024C2  1  DE 03 2C             dec V+3,x
+0024C5  1  DE 02 2C     @c:     dec V+2,x
+0024C8  1  DE 01 2C     @b:     dec V+1,x
+0024CB  1  DE 00 2C     @a:     dec V,x
+0024CE  1  60                   rts
+0024CF  1  1E 00 2C     shl32:  asl V,x
+0024D2  1  3E 01 2C             rol V+1,x
+0024D5  1  3E 02 2C             rol V+2,x
+0024D8  1  3E 03 2C             rol V+3,x
+0024DB  1  60                   rts
+0024DC  1  BD 00 2C     cmp32:  lda V,x                 ; Z=1 se iguais
+0024DF  1  D9 00 2C             cmp V,y
+0024E2  1  D0 16                bne @r
+0024E4  1  BD 01 2C             lda V+1,x
+0024E7  1  D9 01 2C             cmp V+1,y
+0024EA  1  D0 0E                bne @r
+0024EC  1  BD 02 2C             lda V+2,x
+0024EF  1  D9 02 2C             cmp V+2,y
+0024F2  1  D0 06                bne @r
+0024F4  1  BD 03 2C             lda V+3,x
+0024F7  1  D9 03 2C             cmp V+3,y
+0024FA  1  60           @r:     rts
+0024FB  1  BD 03 2C     pr32:   lda V+3,x
+0024FE  1  20 DA FD             jsr PRBYTE
+002501  1  BD 02 2C             lda V+2,x
+002504  1  20 DA FD             jsr PRBYTE
+002507  1  BD 01 2C             lda V+1,x
+00250A  1  20 DA FD             jsr PRBYTE
+00250D  1  BD 00 2C             lda V,x
+002510  1  4C DA FD             jmp PRBYTE
+002513  1               
+002513  1               
+002513  1               ; leitura de setor (LBA 28 bits em vLBA) para o buffer de pagina A (512 bytes). C=1 = erro
+002513  1  A9 28        rdsec_s: lda #>SBUF
+002515  1  85 07        rdsec:  sta PTR+1
+002517  1  64 06                stz PTR
+002519  1  20 70 25             jsr waitrdy
+00251C  1  B0 4F                bcs @r
+00251E  1  A9 01                lda #1
+002520  1  8D FA C0             sta SECCNT
+002523  1  AD 00 2C             lda V+vLBA
+002526  1  8D FB C0             sta SECT
+002529  1  AD 01 2C             lda V+vLBA+1
+00252C  1  8D FC C0             sta CYL
+00252F  1  AD 02 2C             lda V+vLBA+2
+002532  1  8D FD C0             sta CYLH
+002535  1  AD 03 2C             lda V+vLBA+3
+002538  1  29 0F                and #$0F
+00253A  1  09 E0                ora #$E0
+00253C  1  8D FE C0             sta HEAD
+00253F  1  9C F0 C0             stz DATAH
+002542  1  A9 20                lda #$20
+002544  1  8D FF C0             sta CMD
+002547  1  20 70 25             jsr waitrdy
+00254A  1  B0 21                bcs @r
+00254C  1  AD FF C0             lda STATUS
+00254F  1  29 09                and #$09
+002551  1  C9 08                cmp #$08
+002553  1  D0 19                bne @e
+002555  1  A2 02                ldx #2
+002557  1  A0 00                ldy #0
+002559  1  AD F8 C0     @l:     lda DATAL
+00255C  1  91 06                sta (PTR),y
+00255E  1  C8                   iny
+00255F  1  AD F0 C0             lda DATAH
+002562  1  91 06                sta (PTR),y
+002564  1  C8                   iny
+002565  1  D0 F2                bne @l
+002567  1  E6 07                inc PTR+1
+002569  1  CA                   dex
+00256A  1  D0 ED                bne @l
+00256C  1  18                   clc
+00256D  1  60           @r:     rts
+00256E  1  38           @e:     sec
+00256F  1  60                   rts
+002570  1               
+002570  1               ; espera BSY=0 (maximo ~2 s)
+002570  1               waitrdy:
+002570  1  A2 00                ldx #0
+002572  1  A0 00                ldy #0
+002574  1  A9 08                lda #8
+002576  1  85 FC                sta TMP
+002578  1  AD FF C0     @w:     lda STATUS
+00257B  1  10 0C                bpl @ok
+00257D  1  88                   dey
+00257E  1  D0 F8                bne @w
+002580  1  CA                   dex
+002581  1  D0 F5                bne @w
+002583  1  C6 FC                dec TMP
+002585  1  D0 F1                bne @w
+002587  1  38                   sec
+002588  1  60                   rts
+002589  1  18           @ok:    clc
+00258A  1  60                   rts
+00258B  1               
+00258B  1               
+00258B  1  29 7F        pch:    and #$7F
+00258D  1  C9 20                cmp #$20
+00258F  1  B0 02                bcs @p
+002591  1  A9 2E                lda #'.'
+002593  1  09 80        @p:     ora #$80
+002595  1  4C ED FD             jmp COUT
+002598  1               
+002598  1               ; imprime string inline (terminada em 0) logo apos o JSR; preserva X e Y
+002598  1  68           msg:    pla
+002599  1  85 FA                sta MP
+00259B  1  68                   pla
+00259C  1  85 FB                sta MP+1
+00259E  1  E6 FA        @m:     inc MP
+0025A0  1  D0 02                bne @m2
+0025A2  1  E6 FB                inc MP+1
+0025A4  1  B2 FA        @m2:    lda (MP)
+0025A6  1  F0 07                beq @d
+0025A8  1  09 80                ora #$80
+0025AA  1  20 ED FD             jsr COUT
+0025AD  1  80 EF                bra @m
+0025AF  1  A5 FB        @d:     lda MP+1
+0025B1  1  48                   pha
+0025B2  1  A5 FA                lda MP
+0025B4  1  48                   pha
+0025B5  1  60                   rts
+0025B6  1               
+0025B6  1               
+0025B6  1  AE 50 2C     ioerr:  ldx SAVSP
+0025B9  1  9A                   txs
+0025BA  1  20 98 25             jsr msg
+0025BD  1  43 46 46 41          .byte "CFFA: ERRO DE LEITURA",0
+0025C1  1  3A 20 45 52  
+0025C5  1  52 4F 20 44  
+0025D3  1  4C 8E FD             jmp CROUT
+0025D6  1               
+0025D6  1  FF FF FF FF          .res $26C0-*, $FF       ; $CEC0 no banco 0: nomes (gravados pelo CFFAMENU)
+0025DA  1  FF FF FF FF  
+0025DE  1  FF FF FF FF  
+0026C0  1  20 20 20 20          .res 44, ' '
+0026C4  1  20 20 20 20  
+0026C8  1  20 20 20 20  
+0026EC  1  4E                   .byte 'N'
+0026ED  1  FF FF FF FF          .res $2700-*, $FF
+0026F1  1  FF FF FF FF  
+0026F5  1  FF FF FF FF  
+0026ED  1               

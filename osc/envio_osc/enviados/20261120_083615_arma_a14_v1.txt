@@ -1,0 +1,22 @@
+*RST
+#wait 2
+:CHANnel1:DISPlay ON
+:CHANnel2:DISPlay OFF
+:CHANnel1:COUPling DC
+:CHANnel1:PROBe 10
+:CHANnel1:SCALe 1
+:CHANnel1:OFFSet 2.5
+:TIMebase:SCALe 100E-9
+:TIMebase:POSition 0
+:ACQuire:TYPE NORMal
+:TRIGger:MODE EDGE
+:TRIGger:EDGE:SOURce CHANnel1
+:TRIGger:EDGE:SLOPe POSitive
+:TRIGger:EDGE:LEVel 1.4
+:TRIGger:SWEep NORMal
+:SINGle
+#wait 1
+:CHANnel1:PROBe?
+:TRIGger:EDGE:LEVel?
+:TER?
+#png a14_armado_v1

@@ -1,0 +1,247 @@
+ca65 V2.18 - Ubuntu 2.19-1
+Main file   : gravador_v1.s
+Current file: gravador_v1.s
+
+000000r 1               ; gravador_v1.s - grava um banco da EEPROM X28C256 da CFFA (slot 7) recebendo os dados pela serial
+000000r 1               ; Apple IIe Enhanced (65C02), Super Serial no slot 1 (19200 8N1 pelas chaves), CPLD v1.6.1.
+000000r 1               ; 2026-11-20
+000000r 1               ;
+000000r 1               ; Uso (pela ponte, modo #raw):  6000G  e depois  #sendbin rom\ARQUIVO.bin 256
+000000r 1               ;   ARQUIVO.bin = 2048 bytes = conteudo de $C700-$CEFF do banco (offsets $700-$EFF da imagem de 4 KB).
+000000r 1               ;   $6003 = banco: 0 -> banco do A14=0 (acesso a $C0F4) ; 1 -> banco do A14=1 (acesso a $C0F5)
+000000r 1               ; Protocolo: manda ACK ($06), recebe 256 bytes, repete 8 vezes. ESC no teclado do Apple cancela.
+000000r 1               ; Depois: grava byte a byte so o que for diferente (escrita simples + espera pelo "data polling"),
+000000r 1               ; trava a gravacao, confere os 2048 bytes, volta ao banco 0 e imprime o resumo.
+000000r 1               ; Nada e escrito fora de $C700-$CEFF.
+000000r 1                       .setcpu "65C02"
+000000r 1                       .org $6000
+006000  1               
+006000  1               SSCDAT  = $C098         ; 6551 da Super Serial no slot 1
+006000  1               SSCST   = $C099
+006000  1               KBD     = $C000
+006000  1               KBDSTRB = $C010
+006000  1               COUT    = $FDED
+006000  1               CROUT   = $FD8E
+006000  1               PRBYTE  = $FDDA
+006000  1               
+006000  1               EE_WEON  = $C0F3        ; escrita = destrava ; leitura = trava (CFFA slot 7)
+006000  1               EE_BANK0 = $C0F4        ; A14 = 0
+006000  1               EE_BANK1 = $C0F5        ; A14 = 1
+006000  1               
+006000  1               PTR     = $06           ; endereco na ROM da placa ($C700..$CEFF)
+006000  1               SRC     = $08           ; endereco no buffer
+006000  1               BUF     = $7000         ; 2048 bytes
+006000  1               
+006000  1  4C 0E 60             jmp inicio
+006003  1  01           BANCO:  .byte 1         ; $6003
+006004  1  00 00        NGRAV:  .word 0         ; bytes gravados
+006006  1  00 00        NIGUAL: .word 0         ; bytes que ja estavam certos
+006008  1  00 00        NERRO:  .word 0         ; bytes que nao confirmaram a gravacao
+00600A  1  00 00        NDIF:   .word 0         ; diferencas na conferencia final
+00600C  1  00 00        SOMA:   .word 0         ; soma dos 2048 bytes recebidos
+00600E  1               
+00600E  1  78           inicio: sei
+00600F  1  AD 98 C0             lda SSCDAT              ; descarta lixo na recepcao
+006012  1  9C 04 60             stz NGRAV
+006015  1  9C 05 60             stz NGRAV+1
+006018  1  9C 06 60             stz NIGUAL
+00601B  1  9C 07 60             stz NIGUAL+1
+00601E  1  9C 08 60             stz NERRO
+006021  1  9C 09 60             stz NERRO+1
+006024  1  9C 0A 60             stz NDIF
+006027  1  9C 0B 60             stz NDIF+1
+00602A  1  9C 0C 60             stz SOMA
+00602D  1  9C 0D 60             stz SOMA+1
+006030  1               ; ---------- recepcao: 8 blocos de 256 ----------
+006030  1  A9 00                lda #<BUF
+006032  1  85 08                sta SRC
+006034  1  A9 70                lda #>BUF
+006036  1  85 09                sta SRC+1
+006038  1  A2 08                ldx #8
+00603A  1  A9 06        @blk:   lda #$06
+00603C  1  20 7E 61             jsr envia
+00603F  1  A0 00                ldy #0
+006041  1  20 8B 61     @byte:  jsr recebe
+006044  1  90 03                bcc @rx
+006046  1  4C 44 61             jmp cancela
+006049  1  91 08        @rx:    sta (SRC),y
+00604B  1  18                   clc
+00604C  1  6D 0C 60             adc SOMA
+00604F  1  8D 0C 60             sta SOMA
+006052  1  90 03                bcc @s1
+006054  1  EE 0D 60             inc SOMA+1
+006057  1  C8           @s1:    iny
+006058  1  D0 E7                bne @byte
+00605A  1  E6 09                inc SRC+1
+00605C  1  CA                   dex
+00605D  1  D0 DB                bne @blk
+00605F  1               ; ---------- escolhe o banco e liga a ROM da placa ----------
+00605F  1  AD FF CF             lda $CFFF               ; solta o $C800 de todas as placas
+006062  1  AD 03 60             lda BANCO
+006065  1  F0 05                beq @b0
+006067  1  AD F5 C0             lda EE_BANK1
+00606A  1  80 03                bra @b1
+00606C  1  AD F4 C0     @b0:    lda EE_BANK0
+00606F  1  20 A5 61     @b1:    jsr espera              ; ~2 ms para o A14 assentar
+006072  1  AD 00 C7             lda $C700               ; liga o $C800 da CFFA
+006075  1  8D F3 C0             sta EE_WEON             ; destrava a gravacao
+006078  1               ; ---------- gravacao byte a byte ----------
+006078  1  20 5C 61             jsr inicio_ptr
+00607B  1  B2 08        @g:     lda (SRC)
+00607D  1  D2 06                cmp (PTR)
+00607F  1  F0 26                beq @igual
+006081  1  92 06                sta (PTR)               ; grava (65C02: sem leitura falsa)
+006083  1  A2 00                ldx #0
+006085  1  A0 00                ldy #0
+006087  1  B2 06        @poll:  lda (PTR)
+006089  1  D2 08                cmp (SRC)
+00608B  1  F0 10                beq @ok
+00608D  1  CA                   dex
+00608E  1  D0 F7                bne @poll
+006090  1  88                   dey
+006091  1  D0 F4                bne @poll
+006093  1  EE 08 60             inc NERRO               ; nao confirmou em ~1 s
+006096  1  D0 17                bne @prox
+006098  1  EE 09 60             inc NERRO+1
+00609B  1  80 12                bra @prox
+00609D  1  EE 04 60     @ok:    inc NGRAV
+0060A0  1  D0 0D                bne @prox
+0060A2  1  EE 05 60             inc NGRAV+1
+0060A5  1  80 08                bra @prox
+0060A7  1  EE 06 60     @igual: inc NIGUAL
+0060AA  1  D0 03                bne @prox
+0060AC  1  EE 07 60             inc NIGUAL+1
+0060AF  1  20 6D 61     @prox:  jsr avanca
+0060B2  1  D0 C7                bne @g
+0060B4  1  AD F3 C0             lda EE_WEON             ; leitura = trava
+0060B7  1               ; ---------- conferencia ----------
+0060B7  1  20 5C 61             jsr inicio_ptr
+0060BA  1  B2 06        @v:     lda (PTR)
+0060BC  1  D2 08                cmp (SRC)
+0060BE  1  F0 08                beq @vok
+0060C0  1  EE 0A 60             inc NDIF
+0060C3  1  D0 03                bne @vok
+0060C5  1  EE 0B 60             inc NDIF+1
+0060C8  1  20 6D 61     @vok:   jsr avanca
+0060CB  1  D0 ED                bne @v
+0060CD  1  AD F4 C0             lda EE_BANK0            ; volta ao banco 0 (tambem trava)
+0060D0  1  AD FF CF             lda $CFFF
+0060D3  1               ; ---------- resumo ----------
+0060D3  1  20 B7 61             jsr msg
+0060D6  1  47 52 41 56          .byte "GRAVADOS ",0
+0060DA  1  41 44 4F 53  
+0060DE  1  20 00        
+0060E0  1  AD 05 60             lda NGRAV+1
+0060E3  1  AE 04 60             ldx NGRAV
+0060E6  1  20 B0 61             jsr hex16
+0060E9  1  20 B7 61             jsr msg
+0060EC  1  20 49 47 55          .byte " IGUAIS ",0
+0060F0  1  41 49 53 20  
+0060F4  1  00           
+0060F5  1  AD 07 60             lda NIGUAL+1
+0060F8  1  AE 06 60             ldx NIGUAL
+0060FB  1  20 B0 61             jsr hex16
+0060FE  1  20 B7 61             jsr msg
+006101  1  20 46 41 4C          .byte " FALHAS ",0
+006105  1  48 41 53 20  
+006109  1  00           
+00610A  1  AD 09 60             lda NERRO+1
+00610D  1  AE 08 60             ldx NERRO
+006110  1  20 B0 61             jsr hex16
+006113  1  20 B7 61             jsr msg
+006116  1  20 44 49 46          .byte " DIFERENCAS ",0
+00611A  1  45 52 45 4E  
+00611E  1  43 41 53 20  
+006123  1  AD 0B 60             lda NDIF+1
+006126  1  AE 0A 60             ldx NDIF
+006129  1  20 B0 61             jsr hex16
+00612C  1  20 B7 61             jsr msg
+00612F  1  20 53 4F 4D          .byte " SOMA ",0
+006133  1  41 20 00     
+006136  1  AD 0D 60             lda SOMA+1
+006139  1  AE 0C 60             ldx SOMA
+00613C  1  20 B0 61             jsr hex16
+00613F  1  20 8E FD             jsr CROUT
+006142  1  58                   cli
+006143  1  60                   rts
+006144  1               
+006144  1               cancela:
+006144  1  AD FF CF             lda $CFFF
+006147  1  AD F4 C0             lda EE_BANK0
+00614A  1  20 B7 61             jsr msg
+00614D  1  43 41 4E 43          .byte "CANCELADO",0
+006151  1  45 4C 41 44  
+006155  1  4F 00        
+006157  1  20 8E FD             jsr CROUT
+00615A  1  58                   cli
+00615B  1  60                   rts
+00615C  1               
+00615C  1               ; ---------- rotinas ----------
+00615C  1               inicio_ptr:
+00615C  1  A9 00                lda #$00
+00615E  1  85 06                sta PTR
+006160  1  A9 C7                lda #$C7
+006162  1  85 07                sta PTR+1
+006164  1  A9 00                lda #<BUF
+006166  1  85 08                sta SRC
+006168  1  A9 70                lda #>BUF
+00616A  1  85 09                sta SRC+1
+00616C  1  60                   rts
+00616D  1               avanca:                         ; Z=0 enquanto PTR < $CF00
+00616D  1  E6 08                inc SRC
+00616F  1  D0 02                bne @a1
+006171  1  E6 09                inc SRC+1
+006173  1  E6 06        @a1:    inc PTR
+006175  1  D0 02                bne @a2
+006177  1  E6 07                inc PTR+1
+006179  1  A5 07        @a2:    lda PTR+1
+00617B  1  C9 CF                cmp #$CF
+00617D  1  60                   rts
+00617E  1  48           envia:  pha
+00617F  1  AD 99 C0     @e:     lda SSCST
+006182  1  29 10                and #$10
+006184  1  F0 F9                beq @e
+006186  1  68                   pla
+006187  1  8D 98 C0             sta SSCDAT
+00618A  1  60                   rts
+00618B  1  AD 00 C0     recebe: lda KBD
+00618E  1  10 09                bpl @r1
+006190  1  C9 9B                cmp #$9B                ; ESC
+006192  1  D0 05                bne @r1
+006194  1  2C 10 C0             bit KBDSTRB
+006197  1  38                   sec
+006198  1  60                   rts
+006199  1  AD 99 C0     @r1:    lda SSCST
+00619C  1  29 08                and #$08
+00619E  1  F0 EB                beq recebe
+0061A0  1  AD 98 C0             lda SSCDAT
+0061A3  1  18                   clc
+0061A4  1  60                   rts
+0061A5  1  A2 00        espera: ldx #0
+0061A7  1  A0 02                ldy #2
+0061A9  1  CA           @w:     dex
+0061AA  1  D0 FD                bne @w
+0061AC  1  88                   dey
+0061AD  1  D0 FA                bne @w
+0061AF  1  60                   rts
+0061B0  1  20 DA FD     hex16:  jsr PRBYTE
+0061B3  1  8A                   txa
+0061B4  1  4C DA FD             jmp PRBYTE
+0061B7  1  68           msg:    pla
+0061B8  1  85 08                sta SRC
+0061BA  1  68                   pla
+0061BB  1  85 09                sta SRC+1
+0061BD  1  E6 08        @m:     inc SRC
+0061BF  1  D0 02                bne @m2
+0061C1  1  E6 09                inc SRC+1
+0061C3  1  B2 08        @m2:    lda (SRC)
+0061C5  1  F0 07                beq @d
+0061C7  1  09 80                ora #$80
+0061C9  1  20 ED FD             jsr COUT
+0061CC  1  80 EF                bra @m
+0061CE  1  A5 09        @d:     lda SRC+1
+0061D0  1  48                   pha
+0061D1  1  A5 08                lda SRC
+0061D3  1  48                   pha
+0061D4  1  60                   rts
+0061D4  1               

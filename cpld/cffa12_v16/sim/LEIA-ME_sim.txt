@@ -1,0 +1,3 @@
+Simulacao da v1.6 (Icarus Verilog), 2026-11-20
+- tb.v: 200.000 vetores aleatorios x equacoes da 1.4 -> 0 diferencas nas 14 saidas originais.
+- tb3.v: troca de banco por $C0F4/$C0F5, 20 pulsos espurios de 25 ns no /DEVSEL (ignorados), trava/destrava da gravacao -> 0 erros.

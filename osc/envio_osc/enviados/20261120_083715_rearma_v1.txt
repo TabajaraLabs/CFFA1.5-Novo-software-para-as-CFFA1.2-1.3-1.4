@@ -1,0 +1,7 @@
+:TER?
+:OPERegister:CONDition?
+#png a14_antes_rearme_v1
+:SINGle
+#wait 2
+:TER?
+:OPERegister:CONDition?

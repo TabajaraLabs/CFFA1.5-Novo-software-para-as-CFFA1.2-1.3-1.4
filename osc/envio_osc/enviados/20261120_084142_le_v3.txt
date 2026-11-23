@@ -1,0 +1,7 @@
+:TER?
+:OPERegister:CONDition?
+:TIMebase:SCALe?
+:CHANnel1:SCALe?
+:MEASure:VMAX? CHANnel1
+:MEASure:VMIN? CHANnel1
+#png tela_piorou_v1

@@ -1,0 +1,11 @@
+Primeira gravacao da EEPROM X28C256 pela serial, dentro do Apple - 2026-11-20 09:22
+CFFA 1.2 no slot 7, CPLD v1.6.1 (turbo desligado), fiacao da fase 2 (A14 direto pelo CPLD 27 com pull-up; /OE no 26; /WE no 8).
+Programa em $6400:
+  LDA $CFFF / LDA $C0F5 (banco 4, trava) / espera ~1 ms / LDA $C700 (liga $C800 da placa)
+  STA $C0F3 (destrava) / STA #$A5 em $CEF0 / espera o fim da gravacao lendo $CEF0 ate dar $A5 (data polling)
+  LDA $C0F3 (trava) / le $CEF0 / LDA $C0F4 (banco 0) / le $CEF0 do banco 0
+Resultado ($310-$313): A5 0D 01 FF
+  $310 = A5 -> byte gravado e lido de volta no banco 4, endereco $CEF0 (antes FF; area livre do banco 4)
+  $311/$312 = $010D = 269 voltas de espera (~13 ciclos cada) -> ~3,4 ms de gravacao (X28C256: ate 5 ms por byte)
+  $313 = FF -> banco 0 no mesmo endereco intacto
+Conclusao: gravacao na propria placa FUNCIONA. Pendente: devolver $CEF0 do banco 4 para FF.

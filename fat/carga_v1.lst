@@ -1,0 +1,60 @@
+ca65 V2.18 - Ubuntu 2.19-1
+Main file   : carga_v1.s
+Current file: carga_v1.s
+
+000000r 1               ; carga_v1.s - carregador binario pela Super Serial (slot 1), mora na pagina 3
+000000r 1               ; Protocolo do #sendbin da ponte: antes de cada bloco de 256 bytes o Apple manda ACK ($06).
+000000r 1               ; Uso no monitor:  302:PP NN   (PP = pagina inicial, NN = numero de blocos de 256)   depois 300G
+000000r 1               ; Do BASIC.SYSTEM:  BRUN CARGA  (usa o padrao: pagina $60, 8 blocos = 2 KB em $6000-$67FF)
+000000r 1               ; No fim imprime "S=xxxx" (soma simples de 16 bits de todos os bytes) para conferir.
+000000r 1               ; Montar: ca65 --cpu 65C02 carga_v1.s && ld65 -t none -S $300 carga_v1.o -o carga_v1.bin
+000000r 1                       .setcpu "65C02"
+000000r 1                       .org $0300
+000300  1               SDATA   = $C098
+000300  1               SSTAT   = $C099
+000300  1               COUT    = $FDED
+000300  1               CROUT   = $FD8E
+000300  1               PRBYTE  = $FDDA
+000300  1               P       = $FA
+000300  1               
+000300  1  80 02                bra start               ; $0300: entrada
+000302  1  60           PAGE:   .byte $60               ; $0302: pagina inicial
+000303  1  08           NBLK:   .byte $08               ; $0303: blocos de 256 bytes
+000304  1  AD 02 03     start:  lda PAGE
+000307  1  85 FB                sta P+1
+000309  1  64 FA                stz P
+00030B  1  9C 5B 03             stz SUM
+00030E  1  9C 5C 03             stz SUM+1
+000311  1  AE 03 03             ldx NBLK
+000314  1  AD 99 C0     @b:     lda SSTAT               ; transmissor vazio?
+000317  1  29 10                and #$10
+000319  1  F0 F9                beq @b
+00031B  1  A9 06                lda #$06                ; ACK: pode mandar o bloco
+00031D  1  8D 98 C0             sta SDATA
+000320  1  A0 00                ldy #0
+000322  1  AD 99 C0     @r:     lda SSTAT               ; byte recebido?
+000325  1  29 08                and #$08
+000327  1  F0 F9                beq @r
+000329  1  AD 98 C0             lda SDATA
+00032C  1  91 FA                sta (P),y
+00032E  1  18                   clc
+00032F  1  6D 5B 03             adc SUM
+000332  1  8D 5B 03             sta SUM
+000335  1  90 03                bcc @n
+000337  1  EE 5C 03             inc SUM+1
+00033A  1  C8           @n:     iny
+00033B  1  D0 E5                bne @r
+00033D  1  E6 FB                inc P+1
+00033F  1  CA                   dex
+000340  1  D0 D2                bne @b
+000342  1  A9 D3                lda #'S'|$80
+000344  1  20 ED FD             jsr COUT
+000347  1  A9 BD                lda #'='|$80
+000349  1  20 ED FD             jsr COUT
+00034C  1  AD 5C 03             lda SUM+1
+00034F  1  20 DA FD             jsr PRBYTE
+000352  1  AD 5B 03             lda SUM
+000355  1  20 DA FD             jsr PRBYTE
+000358  1  4C 8E FD             jmp CROUT
+00035B  1  00 00        SUM:    .word 0
+00035B  1               

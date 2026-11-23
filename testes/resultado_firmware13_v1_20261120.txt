@@ -1,0 +1,12 @@
+Firmware 1.3 ("1.2R", laco de leitura rapido) gravado no banco 4 pela serial e medido pelo ProDOS - 2026-11-20 09:31
+Gravador: gravador/gravador_v1 (Apple), arquivo rom/banco4_spdrv13_C700-CEFF_v1.bin (2048 bytes)
+  GRAVADOS 0526 IGUAIS 02DA FALHAS 0000 DIFERENCAS 0000 SOMA DECA   (1318 bytes gravados em ~5 s)
+  (Antes, o mesmo gravador devolveu o banco 4 ao original: GRAVADOS 0001 IGUAIS 07FF ... SOMA CE5D)
+Mudanca no firmware (firmware/spdrv13_v1.s): no ReadBlock, o status ATA e conferido 1x por setor (BSY=0, DRQ=1)
+  em vez de a cada word. As paginas $C7xx e os pontos de entrada nao mudaram (so $C7C0/$C7FA = versao),
+  entao da para trocar de banco com o ProDOS rodando.
+Medicao: 256 blocos (128 KB) lidos pelo MLI READ_BLOCK, unidade $70 (testes/bench_mli_v1_envio.txt):
+  banco 0 (1.2 original):  3,23 s  (~40 KB/s)
+  banco 4 (1.3 rapido):    2,60 s  (~49 KB/s)  -> 20% menos tempo / +24% de vazao, com o ProDOS no caminho
+  banco 0 de novo:         3,24 s  (repetibilidade ok)
+Obs.: o banco 4 deixou de ter o driver 6502 v1.0 (continua guardado em original/ e rom/banco4_orig_C700-CEFF_v1.bin).
