@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-60 0 1040 520" width="100%" font-family="Helvetica,Arial,sans-serif" font-size="13">
+<rect x="300" y="60" width="140" height="420" rx="6" fill="#222" stroke="#000"/>
+<path d="M356.0,60 a14,14 0 0,0 28,0" fill="#fff" stroke="#000"/>
+<text x="370.0" y="380" fill="#fff" text-anchor="middle" font-size="16" font-weight="bold">X28C256</text>
+<text x="370.0" y="400" fill="#ccc" text-anchor="middle">vista de cima</text>
+<line x1="300" y1="75.0" x2="240" y2="75.0" stroke="#e67e22" stroke-width="5"/>
+<text x="308" y="79.0" fill="#fff">1 A14</text>
+<rect x="440" y="70.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="79.0" fill="#fff" text-anchor="end">VCC 28</text>
+<rect x="286" y="100.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="109.0" fill="#fff">2 </text>
+<line x1="440" y1="105.0" x2="500" y2="105.0" stroke="#8e5a2b" stroke-width="5"/>
+<text x="432" y="109.0" fill="#fff" text-anchor="end">/WE 27</text>
+<rect x="286" y="130.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="139.0" fill="#fff">3 </text>
+<rect x="440" y="130.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="139.0" fill="#fff" text-anchor="end"> 26</text>
+<rect x="286" y="160.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="169.0" fill="#fff">4 </text>
+<rect x="440" y="160.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="169.0" fill="#fff" text-anchor="end"> 25</text>
+<rect x="286" y="190.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="199.0" fill="#fff">5 </text>
+<rect x="440" y="190.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="199.0" fill="#fff" text-anchor="end"> 24</text>
+<rect x="286" y="220.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="229.0" fill="#fff">6 </text>
+<rect x="440" y="220.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="229.0" fill="#fff" text-anchor="end"> 23</text>
+<rect x="286" y="250.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="259.0" fill="#fff">7 </text>
+<line x1="440" y1="255.0" x2="500" y2="255.0" stroke="#111" stroke-width="5"/>
+<text x="432" y="259.0" fill="#fff" text-anchor="end">/OE 22</text>
+<rect x="286" y="280.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="289.0" fill="#fff">8 </text>
+<rect x="440" y="280.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="289.0" fill="#fff" text-anchor="end"> 21</text>
+<rect x="286" y="310.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="319.0" fill="#fff">9 </text>
+<rect x="440" y="310.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="319.0" fill="#fff" text-anchor="end">/CE 20</text>
+<rect x="286" y="340.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="349.0" fill="#fff">10 </text>
+<rect x="440" y="340.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="349.0" fill="#fff" text-anchor="end"> 19</text>
+<rect x="286" y="370.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="379.0" fill="#fff">11 </text>
+<rect x="440" y="370.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="379.0" fill="#fff" text-anchor="end"> 18</text>
+<rect x="286" y="400.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="409.0" fill="#fff">12 </text>
+<rect x="440" y="400.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="409.0" fill="#fff" text-anchor="end"> 17</text>
+<rect x="286" y="430.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="439.0" fill="#fff">13 </text>
+<rect x="440" y="430.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="439.0" fill="#fff" text-anchor="end"> 16</text>
+<rect x="286" y="460.0" width="14" height="10" fill="#bbb"/>
+<text x="308" y="469.0" fill="#fff">14 GND</text>
+<rect x="440" y="460.0" width="14" height="10" fill="#bbb"/>
+<text x="432" y="469.0" fill="#fff" text-anchor="end"> 15</text>
+<line x1="240" y1="75.0" x2="240" y2="45.0" stroke="#e67e22" stroke-width="3"/>
+<text x="230" y="39.0" text-anchor="end" fill="#b35900" font-weight="bold">pino 1 (A14) dobrado → CPLD pino 27</text>
+<text x="230" y="79.0" text-anchor="end" fill="#b35900">+ resistor 10k do pino 1 ao 28</text>
+<text x="508" y="109.0" text-anchor="start" fill="#6b3f17" font-weight="bold">pino 27 (/WE) dobrado → CPLD pino 8 (nWE)</text>
+<text x="508" y="125.0" text-anchor="start" fill="#6b3f17">+ resistor 33k (10k–33k) do pino 27 ao pino 28</text>
+<text x="508" y="259.0" text-anchor="start" fill="#000" font-weight="bold">pino 22 (/OE) dobrado → CPLD pino 26 (NOT_RW)</text>
+<text x="508" y="275.0" text-anchor="start" fill="#333">(o mesmo sinal do U2 pino 1)</text>
+<text x="460" y="510" text-anchor="middle" fill="#333">Os demais 25 pinos entram no soquete da placa normalmente. Os furos 1, 22 e 27 do soquete da placa ficam vazios.</text>
+</svg>

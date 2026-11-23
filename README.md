@@ -5,8 +5,10 @@
 Novo firmware, menu de boot e imagens de disco em cartão FAT para a **CFFA** (CompactFlash for Apple II, de Rich Dreher),
 placas 1.2, 1.3 e 1.4, com a EPROM 27C256 trocada por uma **EEPROM 28C256** gravável no próprio Apple e uma lógica nova no CPLD.
 
-A documentação completa, com todo o histórico de desenvolvimento, medições e decisões, está no **[LEIA-ME_v37.md](LEIA-ME_v37.md)**
-(também em [PDF](LEIA-ME_v37.pdf)).
+**Quer modificar a sua placa?** O passo a passo está no **[manual de modificação](manual_modificacao/manual_modificacao_v1.pdf)**: pinos da EPROM, ligações ao CPLD, jumpers e os arquivos a gravar, todos na pasta `manual_modificacao/`.
+
+A documentação completa, com todo o histórico de desenvolvimento, medições e decisões, está no **[LEIA-ME_v39.md](LEIA-ME_v39.md)**
+(também em [PDF](LEIA-ME_v39.pdf)).
 
 ## O que a placa ganha
 
@@ -32,6 +34,7 @@ Tudo foi **simulado antes de ir para a placa**: há simuladores em Python, com 6
 
 | Pasta | Conteúdo |
 |---|---|
+| `manual_modificacao/` | **manual de modificação 1.2 → 1.5 (PDF) e os três arquivos a gravar: EEPROM, CPLD e CFFAMENU.BIN** |
 | `firmware/` | drivers ProDOS 1.3 (original desmontado), 1.4 e 1.5; simuladores e comparadores |
 | `menu/` | carregador do banco 0 e menu CFFAMENU (v1…v11); `para_o_cartao/CFFAMENU.BIN` é a versão atual |
 | `rom/` | imagens dos bancos 0 e 4 e a EEPROM inteira de 32 KB (`CFFA_EEPROM_32K_fw15_v1.bin`) |
@@ -49,9 +52,9 @@ Tudo foi **simulado antes de ir para a placa**: há simuladores em Python, com 6
 
 ## Instalação rápida
 
-1. Grave `rom/CFFA_EEPROM_32K_fw15_v1.bin` numa 28C256 (ou use o gravador no próprio Apple) e instale-a com o adaptador
-   descrito no LEIA-ME. O CPLD precisa da lógica nova (`cpld/`).
-2. Formate um cartão em FAT16 ou FAT32 e copie para a raiz `menu/para_o_cartao/CFFAMENU.BIN` e as suas imagens `.PO`/`.HDV`.
+1. Siga o [manual de modificação](manual_modificacao/manual_modificacao_v1.pdf): grave o CPLD (`cffa12_v161.pof`) e a 28C256
+   (`CFFA_EEPROM_32K_fw15_v1.bin`), monte o adaptador e confira os jumpers.
+2. Formate um cartão em FAT16 ou FAT32 e copie para a raiz `manual_modificacao/CFFAMENU.BIN` e as suas imagens `.PO`/`.HDV`.
    As imagens precisam estar contíguas; num cartão recém-formatado, ficam.
 3. Dê boot pelo slot da CFFA. O menu aparece; monte as imagens com as teclas 1–4, tecle RETURN para dar boot e H para ver a ajuda.
 
